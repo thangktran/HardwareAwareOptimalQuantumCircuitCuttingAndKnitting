@@ -1,0 +1,4 @@
+z3-solver==4.12.2.0
+qiskit==0.44.2
+matplotlib==3.8.0
+pylatexenc==2.10
