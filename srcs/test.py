@@ -122,6 +122,9 @@ V, W, G, I= readCirc(circ)
 checkGraph(V, W+G)
 
 ################################ MODEL VARIABLES ############################################
+# number of partitions
+N_PARTITIONS = 2
+MAX_N_QUBIT_PER_PARTITION = 5
 # gate qubit vertex v assigned to partition p
 o_vp = []
 # circuit is cut at edge e
@@ -130,9 +133,10 @@ c_e = []
 b_e = []
 # total number of qubits in partition p
 Q_p = []
-# number of partitions
-N_PARTITIONS = 2
-MAX_N_QUBIT_PER_PARTITION = 5
+# Q is maximum number of qubit per partition
+Q = Int('Q')
+# S is the total cost of cutting (overhead sampling)
+S = Int('S')
 # helper object to speed up look-up.
 # o_var_lookup[vIdx][pIdx] return the z3 variable.
 o_var_lookup = defaultdict(dict)
@@ -255,18 +259,15 @@ def enforceWireCut():
 # enforceWireCut()
 # FEATURE: enforce ancilla qubit
 # s.add(Or(b_e))
-Q = Int('Q')
-S = Int('S')
 s.add(Q <= MAX_N_QUBIT_PER_PARTITION) # number of qubit <= maximum number of qubit allowed
 for pIdx in range(N_PARTITIONS):
     s.add(Q >= Q_p[pIdx])
-# TODO: replace the real gamma values
-gamma_e = 1
-gamma_e_k = 1
+GATE_CUT_COST = 6
+WIRE_CUT_COST = 8
 productTerm = 1
 for idx in range(len(b_e)):
     # TODO: check whether this product term is correct.
-    productTerm *= If(And(c_e[idx], Not(b_e[idx])), gamma_e**2, 1) * If(b_e[idx], gamma_e_k**2, 1)
+    productTerm *= If(And(c_e[idx], c_e[idx].edgeType == EdgeType.GateCut), GATE_CUT_COST, 1) * If(And(c_e[idx], c_e[idx].edgeType == EdgeType.WireCut), WIRE_CUT_COST, 1)
 s.add(S == productTerm)
 s.minimize(Q)
 s.minimize(S)
@@ -275,7 +276,10 @@ s.minimize(S)
 
 ################# MAIN ###################
 def checkAndPrintModel(currentModel):
-    print(f"{currentModel.check()}\n")
+    modelStatus = currentModel.check()
+    print(f"{modelStatus}\n")
+    if modelStatus != sat:
+        return
     m = currentModel.model()
     intStr = ""
     boolStr = ""
