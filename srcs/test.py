@@ -195,7 +195,7 @@ for eIdx in range(len(G)):
 assert(N_PARTITIONS <= len(V))
 # populate Q_p
 for pIdx in range(N_PARTITIONS):
-    variableName = f"Q_{pIdx}"
+    variableName = f"Q_p{pIdx}"
     var = Int(variableName)
     # z3.Int doesn't have these properties
     # we add them to make it simpler to retrieve.
@@ -226,6 +226,8 @@ for vIdx, pIdxs in o_var_lookup.items():
     for pIdx, var in pIdxs.items():
         variables.append(var)
     s.add(Or(variables))
+# b_e imply c_e
+s.add([Implies(b_e[idx], c_e[idx]) for idx in range(len(b_e))])
 # Q_p constraints
 for pIdx in range(N_PARTITIONS):
     firstSumTerm = []
@@ -238,6 +240,7 @@ for pIdx in range(N_PARTITIONS):
         firstSumTerm.append(If(var, 1, 0))
     # second sum term
     for c_eVar in c_e:
+        # skip all GateCut edge since we only want wire cut edge
         if c_eVar.edgeType == EdgeType.GateCut: # belong to G
             continue
         u, v = c_eVar.edge
@@ -250,15 +253,6 @@ for pIdx in range(N_PARTITIONS):
         o_upVar = o_var_lookup[u][pIdx]
         thirdSumTerm.append(If(And(b_eVar, Or(o_vpVar, o_upVar)), 1, 0))
     s.add(Q_p[pIdx] == Sum(firstSumTerm+secondSumTerm+thirdSumTerm))
-def enforceWireCut():
-    wireCutVars = []
-    for c_eVar in c_e:
-        if c_eVar.edgeType == EdgeType.WireCut:
-            wireCutVars.append(c_eVar)
-    s.add(Or(c_eVar))
-# enforceWireCut()
-# FEATURE: enforce ancilla qubit
-# s.add(Or(b_e))
 s.add(Q <= MAX_N_QUBIT_PER_PARTITION) # number of qubit <= maximum number of qubit allowed
 for pIdx in range(N_PARTITIONS):
     s.add(Q >= Q_p[pIdx])
