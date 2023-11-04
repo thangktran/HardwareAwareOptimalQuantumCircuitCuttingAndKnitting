@@ -254,9 +254,6 @@ for pIdx in range(N_PARTITIONS):
         o_upVar = o_var_lookup[u][pIdx]
         thirdSumTerm.append(If(And(b_eVar, Or(o_vpVar, o_upVar)), 1, 0))
     s.add(Q_p[pIdx] == Sum(firstSumTerm+secondSumTerm+thirdSumTerm))
-s.add(Q <= MAX_N_QUBIT_PER_PARTITION) # number of qubit <= maximum number of qubit allowed
-for pIdx in range(N_PARTITIONS):
-    s.add(Q >= Q_p[pIdx])
 GATE_CUT_COST = 6
 WIRE_CUT_COST = 8
 productTerm = 1
@@ -264,8 +261,34 @@ for idx in range(len(b_e)):
     # TODO: check whether this product term is correct.
     productTerm *= If(And(c_e[idx], c_e[idx].edgeType == EdgeType.GateCut), GATE_CUT_COST, 1) * If(And(c_e[idx], c_e[idx].edgeType == EdgeType.WireCut), WIRE_CUT_COST, 1)
 s.add(S == productTerm)
+s.add(Q <= MAX_N_QUBIT_PER_PARTITION) # number of qubit <= maximum number of qubit allowed
+for pIdx in range(N_PARTITIONS):
+    s.add(Q >= Q_p[pIdx])
 s.minimize(Q)
 s.minimize(S)
+
+################################ GET MODEL AND PROCESS THEM ############################################
+##### HELPER FUNCTION
+def printModel(m):
+    intStr = ""
+    boolStr = ""
+    for t in m.decls():
+        if is_int(m[t]):
+            intStr += f"{t} = {m[t]}\n"
+        elif is_true(m[t]):
+            boolStr += f"{t} = {m[t]}\n"
+    print(intStr)
+    print(boolStr)
+def outputCircuitPic(circuits, circuitsToDrawDags):
+    for c in circuits:
+        c.draw(output='mpl')
+    for c in circuitsToDrawDags:
+        dag = circuit_to_dag(c)
+        img = dag_drawer(dag=dag, scale=2)
+        plt.figure()
+        plt.imshow(img)
+    plt.show()
+
 # TODO: there're multiple models. how to handle them?!
 modelStatus = s.check()
 print(f"{modelStatus}\n")
@@ -294,26 +317,6 @@ for c_eVar in c_e:
 resultCirc = dag_to_circuit(resultDag)
 
 ################# MAIN ###################
-def printModel(m):
-    intStr = ""
-    boolStr = ""
-    for t in m.decls():
-        if is_int(m[t]):
-            intStr += f"{t} = {m[t]}\n"
-        elif is_true(m[t]):
-            boolStr += f"{t} = {m[t]}\n"
-    print(intStr)
-    print(boolStr)
-def outputCircuitPic(circuits, circuitsToDrawDags):
-    for c in circuits:
-        c.draw(output='mpl')
-    for c in circuitsToDrawDags:
-        dag = circuit_to_dag(c)
-        img = dag_drawer(dag=dag, scale=2)
-        plt.figure()
-        plt.imshow(img)
-    plt.show()
-
 circuitsToDraw = [circ, resultCirc]
 circuitsToDrawDags = [circ, resultCirc]
 printModel(m)
