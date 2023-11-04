@@ -8,10 +8,11 @@ from qiskit.dagcircuit.dagcircuit import DAGCircuit
 from qiskit.dagcircuit import DAGOpNode
 from qiskit.visualization import dag_drawer
 from qiskit.circuit import Qubit
+from qiskit.circuit.library import Barrier
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List
+from typing import *
 from collections import defaultdict
 import math
 
@@ -52,7 +53,7 @@ class DagVertex:
     opNode : DAGOpNode
 # return tuple of V, W and G according to paper.
 # circuit MUST only contains 2 qubit gates.
-def readCirc(circuit : QuantumCircuit):
+def readCirc(circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, List[DagVertex]]:
     # V contains all vertices.
     # entry is DagVertex
     V: List[DagVertex] = []
@@ -63,7 +64,7 @@ def readCirc(circuit : QuantumCircuit):
     # tuples of (v_1_idx, v_2_idx) where v_n_idx belongs to V
     G = []
     # I contains first vertex of each qubit. I is subset of V.
-    I = []
+    I: List[DagVertex] = []
     dag = circuit_to_dag(circuit)
     qubitGateCounter = {}
     qubitPreviousVertexIdx = {}
@@ -156,7 +157,7 @@ class EdgeType(Enum):
     GateCut = 0
     WireCut = 1
 for eIdx in range(len(W)):
-    variableName = f"c_{eIdx}[W]"
+    variableName = f"c_{eIdx}[W]_{W[eIdx][0]}_{W[eIdx][1]}"
     var = Bool(variableName)
     # z3.Bool doesn't have these properties
     # we add them to make it simpler to retrieve.
@@ -165,7 +166,7 @@ for eIdx in range(len(W)):
     var.edgeType = EdgeType.WireCut
     c_e.append(var)
 for eIdx in range(len(G)):
-    variableName = f"c_{eIdx}[G]"
+    variableName = f"c_{eIdx}[G]_{G[eIdx][0]}_{G[eIdx][1]}"
     var = Bool(variableName)
     # z3.Bool doesn't have these properties
     # we add them to make it simpler to retrieve.
@@ -175,7 +176,7 @@ for eIdx in range(len(G)):
     c_e.append(var)
 # populate b_e
 for eIdx in range(len(W)):
-    variableName = f"b_{eIdx}[W]"
+    variableName = f"b_{eIdx}[W]_{W[eIdx][0]}_{W[eIdx][1]}"
     var = Bool(variableName)
     # z3.Bool doesn't have these properties
     # we add them to make it simpler to retrieve.
@@ -184,7 +185,7 @@ for eIdx in range(len(W)):
     var.edgeType = EdgeType.WireCut
     b_e.append(var)
 for eIdx in range(len(G)):
-    variableName = f"b_{eIdx}[G]"
+    variableName = f"b_{eIdx}[G]_{G[eIdx][0]}_{G[eIdx][1]}"
     var = Bool(variableName)
     # z3.Bool doesn't have these properties
     # we add them to make it simpler to retrieve.
@@ -265,16 +266,35 @@ for idx in range(len(b_e)):
 s.add(S == productTerm)
 s.minimize(Q)
 s.minimize(S)
-
-
+# TODO: there're multiple models. how to handle them?!
+modelStatus = s.check()
+print(f"{modelStatus}\n")
+if modelStatus != sat:
+    print(f"model is not satisfied. Exiting ...")
+    exit(0)
+m = s.model()
+# replace cut with barriers
+resultDag = circuit_to_dag(circ)
+for c_eVar in c_e:
+    if not is_true(m[c_eVar]):
+        continue
+    uIdx, vIdx = c_eVar.edge
+    v = V[vIdx]
+    u = V[uIdx]
+    if c_eVar.edgeType == EdgeType.GateCut:
+        # TODO: use GateCut(Barrier) Op instead of Barrier directly ?!
+        resultDag.substitute_node(v.opNode, Barrier(2, f"{str(c_eVar)}"))
+    elif c_eVar.edgeType == EdgeType.WireCut:
+        newDag = DAGCircuit()
+        newDag.add_qubits(u.opNode.qargs)
+        newDag.apply_operation_back(op=u.opNode.op, qargs=u.opNode.qargs)
+        newDag.apply_operation_back(op=Barrier(1, f"{str(c_eVar)}"), qargs=[u.qubit])
+        resultDag.substitute_node_with_dag(u.opNode, newDag)
+        
+resultCirc = dag_to_circuit(resultDag)
 
 ################# MAIN ###################
-def checkAndPrintModel(currentModel):
-    modelStatus = currentModel.check()
-    print(f"{modelStatus}\n")
-    if modelStatus != sat:
-        return
-    m = currentModel.model()
+def printModel(m):
     intStr = ""
     boolStr = ""
     for t in m.decls():
@@ -284,14 +304,17 @@ def checkAndPrintModel(currentModel):
             boolStr += f"{t} = {m[t]}\n"
     print(intStr)
     print(boolStr)
-def outputCircuitPic(originalCircuit, sanitizedCircuit):
-    originalCircuit.draw(output='mpl')
-    sanitizedCircuit.draw(output='mpl')
-    testDag = circuit_to_dag(sanitizedCircuit)
-    img = dag_drawer(dag=testDag, scale=2)
-    plt.figure()
-    plt.imshow(img)
+def outputCircuitPic(circuits, circuitsToDrawDags):
+    for c in circuits:
+        c.draw(output='mpl')
+    for c in circuitsToDrawDags:
+        dag = circuit_to_dag(c)
+        img = dag_drawer(dag=dag, scale=2)
+        plt.figure()
+        plt.imshow(img)
     plt.show()
 
-checkAndPrintModel(s)
-# outputCircuitPic(input_circ, circ)
+circuitsToDraw = [circ, resultCirc]
+circuitsToDrawDags = [circ, resultCirc]
+printModel(m)
+outputCircuitPic(circuitsToDraw, circuitsToDrawDags)
