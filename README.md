@@ -39,3 +39,4 @@ Symmetry-breaking constraints
 #     sumTerms.append(term)
 # s.add(S == 10 ** Sum(sumTerms))
 ```
+- export P=4 && python -u test.py -p $P 2>&1 | tee "${P}_run.log"

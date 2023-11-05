@@ -17,6 +17,20 @@ from typing import *
 from collections import defaultdict
 import math
 from random import randrange
+import datetime
+import sys
+import pathlib
+
+BENCHMARK_N_PARTITIONS = None
+BENCHMARK_RUNNING = False
+BENCHMARK_DIR = ""
+if len(sys.argv) > 2 and sys.argv[1] == "-p":
+    BENCHMARK_RUNNING = True
+    BENCHMARK_N_PARTITIONS = int(sys.argv[2])
+    BENCHMARK_DIR = f"./benchmark_result/{BENCHMARK_N_PARTITIONS}"
+    pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
+
+print(f"start time: {datetime.datetime.now()}")
 
 ######################################## circuit ###############################################
 def defaultTestCircuit():
@@ -56,6 +70,8 @@ class DagVertex:
     qubit : Qubit
     nThGate : int
     opNode : DAGOpNode
+    opNodeV0Idx : int
+    opNodeV1Idx : int
 # return tuple of V, W and G according to paper.
 # circuit MUST only contains 2 qubit gates.
 def readCirc(circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, List[DagVertex]]:
@@ -87,8 +103,8 @@ def readCirc(circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, Lis
         v1Idx = v0Idx + 1
         v.op.label = f"{v0Idx}_{v1Idx}"
         # add 2 vertices
-        v0 = DagVertex(v0Idx, qubit0, qubitGateCounter[qubit0], v)
-        v1 = DagVertex(v1Idx, qubit1, qubitGateCounter[qubit1], v)
+        v0 = DagVertex(v0Idx, qubit0, qubitGateCounter[qubit0], v, v0Idx, v1Idx)
+        v1 = DagVertex(v1Idx, qubit1, qubitGateCounter[qubit1], v, v0Idx, v1Idx)
         V.append(v0)
         V.append(v1)
         qubitGateCounter[qubit0] += 1
@@ -130,8 +146,10 @@ checkGraph(V, W+G)
 
 ################################ MODEL VARIABLES ############################################
 # number of partitions
-N_PARTITIONS = 2
+N_PARTITIONS = 2 if BENCHMARK_N_PARTITIONS is None else BENCHMARK_N_PARTITIONS
 MAX_N_QUBIT_PER_PARTITION = 100
+print(f"N_PARTITIONS {N_PARTITIONS}")
+print(f"MAX_N_QUBIT_PER_PARTITION {MAX_N_QUBIT_PER_PARTITION}")
 # gate qubit vertex v assigned to partition p
 o_vp = []
 # circuit is cut at edge e
@@ -293,18 +311,25 @@ def printModel(m):
             boolStr += f"{t} = {m[t]}\n"
     print(intStr)
     print(boolStr)
-def outputCircuitPic(circuits, circuitsToDrawDags):
+def outputCircuitPic(circuits, drawDagOfCircuits = False, dags = []):
     for c in circuits:
         c.draw(output='mpl')
-    for c in circuitsToDrawDags:
-        dag = circuit_to_dag(c)
+        if drawDagOfCircuits:
+            dag = circuit_to_dag(c)
+            img = dag_drawer(dag=dag, scale=2)
+            plt.figure()
+            plt.imshow(img)
+    for dag in dags:
         img = dag_drawer(dag=dag, scale=2)
         plt.figure()
         plt.imshow(img)
     plt.show()
+def saveCircuit(circ, dir, name):
+    circ.draw(output='mpl', filename=f"{dir}/{name}")
 
 # TODO: there're multiple models. how to handle them?!
 modelStatus = s.check()
+print(f"finish time: {datetime.datetime.now()}")
 print(f"{modelStatus}\n")
 if modelStatus != sat:
     print(f"model is not satisfied. Exiting ...")
@@ -316,8 +341,8 @@ for c_eVar in c_e:
     if not is_true(m[c_eVar]):
         continue
     uIdx, vIdx = c_eVar.edge
-    v = V[vIdx]
     u = V[uIdx]
+    v = V[vIdx]
     if c_eVar.edgeType == EdgeType.GateCut:
         # TODO: use GateCut(Barrier) Op instead of Barrier directly ?!
         resultDag.substitute_node(v.opNode, Barrier(2, f"{str(c_eVar)}"))
@@ -326,7 +351,16 @@ for c_eVar in c_e:
         newDag.add_qubits(u.opNode.qargs)
         newDag.apply_operation_back(op=u.opNode.op, qargs=u.opNode.qargs)
         newDag.apply_operation_back(op=Barrier(1, f"{str(c_eVar)}"), qargs=[u.qubit])
-        resultDag.substitute_node_with_dag(u.opNode, newDag)
+        newNodesMap = resultDag.substitute_node_with_dag(u.opNode, newDag)
+        newNode = [*newNodesMap.values()][0]
+        u0 = V[u.opNodeV0Idx]
+        u1 = V[u.opNodeV1Idx]
+        assert(u.opNode == u0.opNode == u1.opNode)
+        assert(newNode.op.name == u.opNode.op.name == u0.opNode.op.name == u1.opNode.op.name)
+        assert(newNode.op.label == u.opNode.op.label == u0.opNode.op.label == u1.opNode.op.label)
+        assert(newNode.qargs == u.opNode.qargs == u0.opNode.qargs == u1.opNode.qargs)
+        u0.opNode = newNode
+        u1.opNode = newNode
         
 resultCirc = dag_to_circuit(resultDag)
 
@@ -334,4 +368,8 @@ resultCirc = dag_to_circuit(resultDag)
 circuitsToDraw = [circ, resultCirc]
 circuitsToDrawDags = [circ, resultCirc]
 printModel(m)
-outputCircuitPic(circuitsToDraw, [])
+if BENCHMARK_RUNNING:
+    saveCircuit(circ, BENCHMARK_DIR, "original")
+    saveCircuit(resultCirc, BENCHMARK_DIR, "cutted")
+else:
+    outputCircuitPic(circuitsToDraw)
