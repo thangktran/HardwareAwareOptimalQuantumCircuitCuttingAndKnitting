@@ -9,29 +9,34 @@ from qiskit.dagcircuit import DAGOpNode
 from qiskit.visualization import dag_drawer
 from qiskit.circuit import Qubit
 from qiskit.circuit.library import Barrier
+from qiskit.circuit.random import random_circuit
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import *
 from collections import defaultdict
 import math
+from random import randrange
 
 ######################################## circuit ###############################################
-nQubits = 3
-input_circ = QuantumCircuit(nQubits, nQubits)
-input_circ.h(0)
-input_circ.cx(0, 1)
-input_circ.cx(0, 2)
-input_circ.cx(0, 1)
-input_circ.cx(1, 2)
-input_circ.cx(0, 1)
-#############################
-# input_circ.h(0)
-# input_circ.cx(0, 1)
-# input_circ.cx(0, 2)
-# # input_circ.ccx(0, 1, 2)
-input_circ.measure(range(nQubits), range(nQubits))
-
+def defaultTestCircuit():
+    nQubits = 3
+    input_circ = QuantumCircuit(nQubits, nQubits)
+    input_circ.h(0)
+    input_circ.cx(0, 1)
+    input_circ.cx(0, 2)
+    input_circ.cx(0, 1)
+    input_circ.cx(1, 2)
+    input_circ.cx(0, 1)
+    input_circ.measure(range(nQubits), range(nQubits))
+    return input_circ
+def generateRandomCircuit():
+    nQubits = 5 # randrange(3, 15) # 40
+    depth = 4 # randrange(5, 20) # 51
+    print(f"random circuit with {nQubits} qubits & depth of {depth} is generated")
+    return random_circuit(nQubits, depth)
+input_circ = generateRandomCircuit()
+# input_circ = defaultTestCircuit()
 
 ################################ PREPROCESSING STEPS ############################################
 
@@ -65,7 +70,7 @@ def readCirc(circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, Lis
     G = []
     # I contains first vertex of each qubit. I is subset of V.
     I: List[DagVertex] = []
-    dag = circuit_to_dag(circuit)
+    dag = circuit_to_dag(circuit, False)
     qubitGateCounter = {}
     qubitPreviousVertexIdx = {}
     for qubit in dag.qubits:
@@ -80,6 +85,7 @@ def readCirc(circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, Lis
         assert(len(circ.find_bit(qubit1).registers)==1)
         v0Idx = len(V)
         v1Idx = v0Idx + 1
+        v.op.label = f"{v0Idx}_{v1Idx}"
         # add 2 vertices
         v0 = DagVertex(v0Idx, qubit0, qubitGateCounter[qubit0], v)
         v1 = DagVertex(v1Idx, qubit1, qubitGateCounter[qubit1], v)
@@ -125,7 +131,7 @@ checkGraph(V, W+G)
 ################################ MODEL VARIABLES ############################################
 # number of partitions
 N_PARTITIONS = 2
-MAX_N_QUBIT_PER_PARTITION = 5
+MAX_N_QUBIT_PER_PARTITION = 100
 # gate qubit vertex v assigned to partition p
 o_vp = []
 # circuit is cut at edge e
@@ -257,15 +263,23 @@ for pIdx in range(N_PARTITIONS):
 GATE_CUT_COST = 6
 WIRE_CUT_COST = 8
 productTerm = 1
-for idx in range(len(b_e)):
+for idx in range(len(c_e)):
     # TODO: check whether this product term is correct.
     productTerm *= If(And(c_e[idx], c_e[idx].edgeType == EdgeType.GateCut), GATE_CUT_COST, 1) * If(And(c_e[idx], c_e[idx].edgeType == EdgeType.WireCut), WIRE_CUT_COST, 1)
 s.add(S == productTerm)
+s.add(S>1)
 s.add(Q <= MAX_N_QUBIT_PER_PARTITION) # number of qubit <= maximum number of qubit allowed
 for pIdx in range(N_PARTITIONS):
     s.add(Q >= Q_p[pIdx])
 s.minimize(Q)
 s.minimize(S)
+# helper constraints
+nWireCuts = Int('nWireCuts')
+nGateCuts = Int('nGateCuts')
+sumWireCuts = [If(And(c_e[idx], c_e[idx].edgeType == EdgeType.WireCut), 1, 0) for idx in range(len(c_e))]
+sumGateCuts = [If(And(c_e[idx], c_e[idx].edgeType == EdgeType.GateCut), 1, 0) for idx in range(len(c_e))]
+s.add(nWireCuts == Sum(sumWireCuts))
+s.add(nGateCuts == Sum(sumGateCuts))
 
 ################################ GET MODEL AND PROCESS THEM ############################################
 ##### HELPER FUNCTION
@@ -320,4 +334,4 @@ resultCirc = dag_to_circuit(resultDag)
 circuitsToDraw = [circ, resultCirc]
 circuitsToDrawDags = [circ, resultCirc]
 printModel(m)
-outputCircuitPic(circuitsToDraw, circuitsToDrawDags)
+outputCircuitPic(circuitsToDraw, [])
