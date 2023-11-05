@@ -21,13 +21,19 @@ import datetime
 import sys
 import pathlib
 
+from qcg import generators
+
 BENCHMARK_N_PARTITIONS = None
 BENCHMARK_RUNNING = False
 BENCHMARK_DIR = ""
 if len(sys.argv) > 2 and sys.argv[1] == "-p":
     BENCHMARK_RUNNING = True
     BENCHMARK_N_PARTITIONS = int(sys.argv[2])
-    BENCHMARK_DIR = f"./benchmark_result/{BENCHMARK_N_PARTITIONS}"
+    BENCHMARK_DIR = ""
+    if len(sys.argv) == 4:
+        BENCHMARK_DIR = f"./benchmark_result/{sys.argv[3]}/{BENCHMARK_N_PARTITIONS}"
+    else:
+        BENCHMARK_DIR = f"./benchmark_result/{BENCHMARK_N_PARTITIONS}"
     pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
 
 print(f"start time: {datetime.datetime.now()}")
@@ -43,14 +49,33 @@ def defaultTestCircuit():
     input_circ.cx(1, 2)
     input_circ.cx(0, 1)
     input_circ.measure(range(nQubits), range(nQubits))
+    print(f"test circuit with {nQubits} qubits is generated")
     return input_circ
 def generateRandomCircuit():
-    nQubits = 5 # randrange(3, 15) # 40
-    depth = 4 # randrange(5, 20) # 51
+    nQubits = 10 # randrange(3, 15) # 40
+    depth = 10 # randrange(5, 20) # 51
     print(f"random circuit with {nQubits} qubits & depth of {depth} is generated")
     return random_circuit(nQubits, depth)
-input_circ = generateRandomCircuit()
+def generateSupremacy():
+    nQubits = 16
+    depth = 1
+    def factor_int(n):
+        nsqrt = math.ceil(math.sqrt(n))
+        val = nsqrt
+        while 1:
+            co_val = int(n / val)
+            if val * co_val == n:
+                return val, co_val
+            else:
+                val -= 1
+    i, j = factor_int(nQubits)
+    assert(abs(i - j) <= 2)
+    input_circ = generators.gen_supremacy(i, j, depth * 8)
+    print(f"supremacy circuit with {nQubits} qubits & depth of {depth} is generated")
+    return input_circ
+# input_circ = generateRandomCircuit()
 # input_circ = defaultTestCircuit()
+input_circ = generateSupremacy()
 
 ################################ PREPROCESSING STEPS ############################################
 
