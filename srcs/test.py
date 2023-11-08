@@ -36,7 +36,8 @@ if len(sys.argv) > 2 and sys.argv[1] == "-p":
         BENCHMARK_DIR = f"./benchmark_result/{BENCHMARK_N_PARTITIONS}"
     pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
 
-print(f"start time: {datetime.datetime.now()}")
+startTime = datetime.datetime.now()
+print(f"start time: {startTime}")
 
 ######################################## circuit ###############################################
 def defaultTestCircuit():
@@ -52,8 +53,8 @@ def defaultTestCircuit():
     print(f"test circuit with {nQubits} qubits is generated")
     return input_circ
 def generateRandomCircuit():
-    nQubits = 10 # randrange(3, 15) # 40
-    depth = 10 # randrange(5, 20) # 51
+    nQubits = 5 # randrange(3, 15) # 40
+    depth = 4 # randrange(5, 20) # 51
     print(f"random circuit with {nQubits} qubits & depth of {depth} is generated")
     return random_circuit(nQubits, depth)
 def generateSupremacy():
@@ -73,9 +74,9 @@ def generateSupremacy():
     input_circ = generators.gen_supremacy(i, j, depth * 8)
     print(f"supremacy circuit with {nQubits} qubits & depth of {depth} is generated")
     return input_circ
-# input_circ = generateRandomCircuit()
+input_circ = generateRandomCircuit()
 # input_circ = defaultTestCircuit()
-input_circ = generateSupremacy()
+# input_circ = generateSupremacy()
 
 ################################ PREPROCESSING STEPS ############################################
 
@@ -354,7 +355,9 @@ def saveCircuit(circ, dir, name):
 
 # TODO: there're multiple models. how to handle them?!
 modelStatus = s.check()
-print(f"finish time: {datetime.datetime.now()}")
+endTime = datetime.datetime.now()
+print(f"start time: {endTime}")
+print(f"finish time: {endTime-startTime}")
 print(f"{modelStatus}\n")
 if modelStatus != sat:
     print(f"model is not satisfied. Exiting ...")
@@ -375,6 +378,7 @@ for c_eVar in c_e:
         newDag = DAGCircuit()
         newDag.add_qubits(u.opNode.qargs)
         newDag.apply_operation_back(op=u.opNode.op, qargs=u.opNode.qargs)
+        # TODO: use Barrier or WireCut(Barrier)
         newDag.apply_operation_back(op=Barrier(1, f"{str(c_eVar)}"), qargs=[u.qubit])
         newNodesMap = resultDag.substitute_node_with_dag(u.opNode, newDag)
         newNode = [*newNodesMap.values()][0]
