@@ -1,15 +1,18 @@
 from z3 import *
 import numpy as np
 import matplotlib.pyplot as plt
+import networkx as nx
 
 from qiskit import *
 from qiskit.converters import circuit_to_dag, dag_to_circuit
 from qiskit.dagcircuit.dagcircuit import DAGCircuit
 from qiskit.dagcircuit import DAGOpNode
 from qiskit.visualization import dag_drawer
-from qiskit.circuit import Qubit
-from qiskit.circuit.library import Barrier
+from qiskit.circuit import Qubit, QuantumCircuit
+from qiskit.circuit.library import Barrier, SwapGate
 from qiskit.circuit.random import random_circuit
+from qiskit.quantum_info import hellinger_fidelity
+from qiskit_aer import AerSimulator
 
 from dataclasses import dataclass
 from enum import Enum
@@ -22,6 +25,12 @@ import sys
 import pathlib
 
 from qcg import generators
+
+from qvm.compiler.dag import DAG
+from qvm.virtual_gates import VirtualMove, WireCut, VIRTUAL_GATE_TYPES
+from qvm.run import run_virtual_circuit
+from qvm.virtual_circuit import VirtualCircuit
+from qvm.quasi_distr import QuasiDistr
 
 BENCHMARK_N_PARTITIONS = None
 BENCHMARK_RUNNING = False
@@ -123,8 +132,8 @@ def readCirc(circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, Lis
             raise Exception("circuit MUST only contains 2 qubit gates")
         qubit0 = v.qargs[0]
         qubit1 = v.qargs[1]
-        assert(len(circ.find_bit(qubit0).registers)==1)
-        assert(len(circ.find_bit(qubit1).registers)==1)
+        assert(len(circuit.find_bit(qubit0).registers)==1)
+        assert(len(circuit.find_bit(qubit1).registers)==1)
         v0Idx = len(V)
         v1Idx = v0Idx + 1
         v.op.label = f"{v0Idx}_{v1Idx}"
@@ -162,11 +171,11 @@ def checkGraph(vertices, edges):
         verticesSet.add(v)
     assert(verticesSet == set(range(nVertices)))
 # convert to 2-qubit gates
-circ = input_circ.decompose()
+decomposedCirc = input_circ.decompose()
 # remove 1-qubit gate & barries
-circ = circuitSanitizer(circ)
+sanitizedCirc = circuitSanitizer(decomposedCirc)
 # get V, W, G, I
-V, W, G, I= readCirc(circ)
+V, W, G, I= readCirc(sanitizedCirc)
 # verify the vertices and edges are correct.
 checkGraph(V, W+G)
 
@@ -324,6 +333,7 @@ sumWireCuts = [If(And(c_e[idx], c_e[idx].edgeType == EdgeType.WireCut), 1, 0) fo
 sumGateCuts = [If(And(c_e[idx], c_e[idx].edgeType == EdgeType.GateCut), 1, 0) for idx in range(len(c_e))]
 s.add(nWireCuts == Sum(sumWireCuts))
 s.add(nGateCuts == Sum(sumGateCuts))
+#s.add(nWireCuts > 0) # TODO: for testing only. Remove afterward
 
 ################################ GET MODEL AND PROCESS THEM ############################################
 ##### HELPER FUNCTION
@@ -352,6 +362,11 @@ def outputCircuitPic(circuits, drawDagOfCircuits = False, dags = []):
     plt.show()
 def saveCircuit(circ, dir, name):
     circ.draw(output='mpl', filename=f"{dir}/{name}")
+def calculate_fidelity(circuit: QuantumCircuit, noisy_result: QuasiDistr, nShots : int) -> float:
+    ideal_result = QuasiDistr.from_counts(
+        AerSimulator().run(circuit, shots=nShots).result().get_counts()
+    )
+    return ideal_result, hellinger_fidelity(ideal_result, noisy_result)
 
 # TODO: there're multiple models. how to handle them?!
 modelStatus = s.check()
@@ -363,42 +378,76 @@ if modelStatus != sat:
     print(f"model is not satisfied. Exiting ...")
     exit(0)
 m = s.model()
+######################## PROCESSING MODEL RESULTS ##############################
 # replace cut with barriers
-resultDag = circuit_to_dag(circ)
-for c_eVar in c_e:
-    if not is_true(m[c_eVar]):
-        continue
-    uIdx, vIdx = c_eVar.edge
-    u = V[uIdx]
-    v = V[vIdx]
-    if c_eVar.edgeType == EdgeType.GateCut:
-        # TODO: use GateCut(Barrier) Op instead of Barrier directly ?!
-        resultDag.substitute_node(v.opNode, Barrier(2, f"{str(c_eVar)}"))
-    elif c_eVar.edgeType == EdgeType.WireCut:
-        newDag = DAGCircuit()
-        newDag.add_qubits(u.opNode.qargs)
-        newDag.apply_operation_back(op=u.opNode.op, qargs=u.opNode.qargs)
-        # TODO: use Barrier or WireCut(Barrier)
-        newDag.apply_operation_back(op=Barrier(1, f"{str(c_eVar)}"), qargs=[u.qubit])
-        newNodesMap = resultDag.substitute_node_with_dag(u.opNode, newDag)
-        newNode = [*newNodesMap.values()][0]
-        u0 = V[u.opNodeV0Idx]
-        u1 = V[u.opNodeV1Idx]
-        assert(u.opNode == u0.opNode == u1.opNode)
-        assert(newNode.op.name == u.opNode.op.name == u0.opNode.op.name == u1.opNode.op.name)
-        assert(newNode.op.label == u.opNode.op.label == u0.opNode.op.label == u1.opNode.op.label)
-        assert(newNode.qargs == u.opNode.qargs == u0.opNode.qargs == u1.opNode.qargs)
-        u0.opNode = newNode
-        u1.opNode = newNode
-        
-resultCirc = dag_to_circuit(resultDag)
+def markCutEdges(dag : DAGCircuit) -> DAGCircuit:
+    for c_eVar in c_e:
+        if not is_true(m[c_eVar]):
+            continue
+        uIdx, vIdx = c_eVar.edge
+        u = V[uIdx]
+        v = V[vIdx]
+        if c_eVar.edgeType == EdgeType.GateCut:
+            dag.substitute_node(v.opNode, VIRTUAL_GATE_TYPES[v.opNode.name](v.opNode.op, f"VirtualGate {str(c_eVar)}"))
+        elif c_eVar.edgeType == EdgeType.WireCut:
+            newDag = DAGCircuit()
+            newDag.add_qubits(u.opNode.qargs)
+            newDag.apply_operation_back(op=u.opNode.op, qargs=u.opNode.qargs)
+            newDag.apply_operation_back(op=WireCut(1, f"WireCut {str(c_eVar)}"), qargs=[u.qubit])
+            newNodesMap = dag.substitute_node_with_dag(u.opNode, newDag)
+            newNode = [*newNodesMap.values()][0]
+            u0 = V[u.opNodeV0Idx]
+            u1 = V[u.opNodeV1Idx]
+            assert(u.opNode == u0.opNode == u1.opNode)
+            assert(newNode.op.name == u.opNode.op.name == u0.opNode.op.name == u1.opNode.op.name)
+            assert(newNode.op.label == u.opNode.op.label == u0.opNode.op.label == u1.opNode.op.label)
+            assert(newNode.qargs == u.opNode.qargs == u0.opNode.qargs == u1.opNode.qargs)
+            u0.opNode = newNode
+            u1.opNode = newNode
+    return dag
+def _wire_cuts_to_moves(dag: DAG, nWireCuts: int) -> None:
+        move_reg = QuantumRegister(nWireCuts, "vmove")
+        dag.add_qreg(move_reg)
+        qubit_mapping: dict[Qubit, Qubit] = {}
+        cut_ctr = 0
+        def _find_qubit(qubit: Qubit) -> Qubit:
+            while qubit in qubit_mapping:
+                qubit = qubit_mapping[qubit]
+            return qubit
+        for node in nx.topological_sort(dag):
+            instr = dag.get_node_instr(node)
+            instr.qubits = [_find_qubit(qubit) for qubit in instr.qubits]
+            if isinstance(instr.operation, WireCut):
+                instr.operation = VirtualMove(SwapGate(label=instr.operation.label))
+                instr.qubits.append(move_reg[cut_ctr])
+                qubit_mapping[instr.qubits[0]] = instr.qubits[1]
+                cut_ctr += 1
+
+beforeCutDag = circuit_to_dag(sanitizedCirc)
+markedDag = markCutEdges(beforeCutDag)
+markedCirc = dag_to_circuit(markedDag)
+markedCirc.measure_all()
+sanitizedCirc.measure_all()
+markedQvmDag = DAG(markedCirc)
+_wire_cuts_to_moves(markedQvmDag, m[nWireCuts].as_long())
+markedQvmDag.fragment()
+cuttedCirc = markedQvmDag.to_circuit()
 
 ################# MAIN ###################
-circuitsToDraw = [circ, resultCirc]
-circuitsToDrawDags = [circ, resultCirc]
+circuitsToDraw = [sanitizedCirc, markedCirc, cuttedCirc]
+dagsToDraw = []
 printModel(m)
+
+nShots = 10000
+virtualCirc = VirtualCircuit(cuttedCirc)
+result, _ = run_virtual_circuit(virtualCirc, shots=nShots)
+idealResult, fidelity = calculate_fidelity(sanitizedCirc, result, nShots)
+print(f"result fidelity: {fidelity}")
+print(f"ideal_result: {idealResult}")
+print(f"noisy_result: {result}")
+
 if BENCHMARK_RUNNING:
-    saveCircuit(circ, BENCHMARK_DIR, "original")
+    saveCircuit(sanitizedCirc, BENCHMARK_DIR, "original")
     saveCircuit(resultCirc, BENCHMARK_DIR, "cutted")
 else:
-    outputCircuitPic(circuitsToDraw)
+    outputCircuitPic(circuitsToDraw, False, dagsToDraw)

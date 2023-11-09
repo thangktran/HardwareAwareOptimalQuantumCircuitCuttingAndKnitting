@@ -39,4 +39,4 @@ Symmetry-breaking constraints
 #     sumTerms.append(term)
 # s.add(S == 10 ** Sum(sumTerms))
 ```
-- export P=4 DIR="supremacy" && python -u test.py -p $P $DIR 2>&1 | tee "${DIR}_${P}.log"
+- `export P=4 DIR="supremacy" && python -u test.py -p $P $DIR 2>&1 | tee "${DIR}_${P}.log"`

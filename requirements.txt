@@ -1,4 +1,6 @@
 z3-solver==4.12.2.0
 qiskit==0.44.2
+qiskit-aer==0.13.0
 matplotlib==3.8.0
 pylatexenc==2.10
+networkx==3.2.1
