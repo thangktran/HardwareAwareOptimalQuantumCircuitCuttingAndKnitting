@@ -25,8 +25,8 @@ class VirtualCircuit:
             if isinstance(instr.operation, VirtualBinaryGate)
             or isinstance(instr.operation, VirtualMove)
         ]
-        # if len(self._vgate_instrs) == 0:
-        #     raise ValueError("No virtual gates found in the circuit.")
+        if len(self._vgate_instrs) == 0:
+            raise ValueError("No virtual gates found in the circuit.")
         self._circuit = self._replace_vgates_with_endpoints(circuit)
         self._frag_circs = {
             qreg: self._circuit_on_fragment(self._circuit, qreg)
@@ -88,6 +88,11 @@ class VirtualCircuit:
         if fragment not in self._frag_to_backend:
             raise ValueError("Fragment not found.")
         self._frag_to_backend[fragment] = backend
+
+    def set_backend_for_all(self, backend: BackendV2) -> None:
+        self._frag_to_backend = {
+            qreg: backend for qreg in self._frag_circs.keys()
+        }
 
     @staticmethod
     def _replace_vgates_with_endpoints(circuit: QuantumCircuit) -> QuantumCircuit:

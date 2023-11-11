@@ -9,9 +9,11 @@ from qiskit.dagcircuit.dagcircuit import DAGCircuit
 from qiskit.dagcircuit import DAGOpNode
 from qiskit.visualization import dag_drawer
 from qiskit.circuit import Qubit, QuantumCircuit
-from qiskit.circuit.library import Barrier, SwapGate
+from qiskit.circuit.library import Barrier, SwapGate, EfficientSU2
 from qiskit.circuit.random import random_circuit
 from qiskit.quantum_info import hellinger_fidelity
+from qiskit.providers import BackendV2
+from qiskit.providers.fake_provider import FakeKolkataV2
 from qiskit_aer import AerSimulator
 
 from dataclasses import dataclass
@@ -51,21 +53,23 @@ print(f"start time: {startTime}")
 ######################################## circuit ###############################################
 def defaultTestCircuit():
     nQubits = 3
-    input_circ = QuantumCircuit(nQubits, nQubits)
-    input_circ.h(0)
-    input_circ.cx(0, 1)
-    input_circ.cx(0, 2)
-    input_circ.cx(0, 1)
-    input_circ.cx(1, 2)
-    input_circ.cx(0, 1)
-    input_circ.measure(range(nQubits), range(nQubits))
+    inputCirc = QuantumCircuit(nQubits, nQubits)
+    inputCirc.cx(0, 1)
+    inputCirc.cx(0, 2)
+    inputCirc.h(0)
+    inputCirc.cx(0, 1)
+    inputCirc.cx(1, 2)
+    inputCirc.cx(0, 1)
+    inputCirc.measure_all()
     print(f"test circuit with {nQubits} qubits is generated")
-    return input_circ
+    return inputCirc
 def generateRandomCircuit():
     nQubits = 5 # randrange(3, 15) # 40
     depth = 4 # randrange(5, 20) # 51
+    inputCirc = random_circuit(nQubits, depth)
+    inputCirc.measure_all()
     print(f"random circuit with {nQubits} qubits & depth of {depth} is generated")
-    return random_circuit(nQubits, depth)
+    return inputCirc
 def generateSupremacy():
     nQubits = 16
     depth = 1
@@ -80,25 +84,26 @@ def generateSupremacy():
                 val -= 1
     i, j = factor_int(nQubits)
     assert(abs(i - j) <= 2)
-    input_circ = generators.gen_supremacy(i, j, depth * 8)
+    inputCirc = generators.gen_supremacy(i, j, depth * 8)
+    inputCirc.measure_all()
     print(f"supremacy circuit with {nQubits} qubits & depth of {depth} is generated")
-    return input_circ
-input_circ = generateRandomCircuit()
-# input_circ = defaultTestCircuit()
-# input_circ = generateSupremacy()
-
+    return inputCirc
+def generateEfficientSu2():
+    nQubits = 8
+    entanglement = "linear"
+    inputCirc = EfficientSU2(nQubits, entanglement=entanglement, reps=2)
+    inputCirc = inputCirc.bind_parameters(
+        {param: np.random.randn() / 2 for param in inputCirc.parameters}
+    )
+    inputCirc.measure_all()
+    print(f"EfficientSU2 circuit with {nQubits} qubits & {entanglement} entanglement is generated")
+    return inputCirc
+# inputCirc = generateRandomCircuit()
+inputCirc = defaultTestCircuit()
+# inputCirc = generateSupremacy()
+# inputCirc = generateEfficientSu2()
 ################################ PREPROCESSING STEPS ############################################
 
-# remove 1-qubit gate & barriers
-def circuitSanitizer(c : QuantumCircuit) -> QuantumCircuit:
-    dag = circuit_to_dag(c)
-    cleanDag = DAGCircuit()
-    for qreg in c.qregs:
-        cleanDag.add_qreg(qreg)
-    for v in dag.topological_op_nodes():
-        if v.op.name != "barrier" and len(v.qargs) == 2:
-            cleanDag.apply_operation_back(op=v.op, qargs=v.qargs)
-    return dag_to_circuit(cleanDag)
 @dataclass
 class DagVertex:
     idx : int
@@ -128,8 +133,9 @@ def readCirc(circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, Lis
         qubitGateCounter[qubit] = 0
         qubitPreviousVertexIdx[qubit] = None
     for v in dag.topological_op_nodes():
-        if len(v.qargs) != 2:
-            raise Exception("circuit MUST only contains 2 qubit gates")
+        # skip barriers and non-2qubit-gates
+        if len(v.qargs) != 2 or v.op.name == "barrier":
+            continue
         qubit0 = v.qargs[0]
         qubit1 = v.qargs[1]
         assert(len(circuit.find_bit(qubit0).registers)==1)
@@ -171,11 +177,9 @@ def checkGraph(vertices, edges):
         verticesSet.add(v)
     assert(verticesSet == set(range(nVertices)))
 # convert to 2-qubit gates
-decomposedCirc = input_circ.decompose()
-# remove 1-qubit gate & barries
-sanitizedCirc = circuitSanitizer(decomposedCirc)
+decomposedCirc = inputCirc.decompose(gates_to_decompose=VIRTUAL_GATE_TYPES.keys())
 # get V, W, G, I
-V, W, G, I= readCirc(sanitizedCirc)
+V, W, G, I = readCirc(decomposedCirc)
 # verify the vertices and edges are correct.
 checkGraph(V, W+G)
 
@@ -338,15 +342,12 @@ s.add(nGateCuts == Sum(sumGateCuts))
 ################################ GET MODEL AND PROCESS THEM ############################################
 ##### HELPER FUNCTION
 def printModel(m):
-    intStr = ""
-    boolStr = ""
-    for t in m.decls():
-        if is_int(m[t]):
-            intStr += f"{t} = {m[t]}\n"
-        elif is_true(m[t]):
-            boolStr += f"{t} = {m[t]}\n"
-    print(intStr)
-    print(boolStr)
+    print(f"S {m[S].as_long()}")
+    print(f"nWireCuts {m[nWireCuts].as_long()}")
+    print(f"nGateCuts {m[nGateCuts].as_long()}")
+    print(f"Q {m[Q].as_long()}")
+    for pIdx in range(N_PARTITIONS):
+        print(f"Q_p{pIdx} {m[Q_p[pIdx]].as_long()}")
 def outputCircuitPic(circuits, drawDagOfCircuits = False, dags = []):
     for c in circuits:
         c.draw(output='mpl')
@@ -362,17 +363,22 @@ def outputCircuitPic(circuits, drawDagOfCircuits = False, dags = []):
     plt.show()
 def saveCircuit(circ, dir, name):
     circ.draw(output='mpl', filename=f"{dir}/{name}")
-def calculate_fidelity(circuit: QuantumCircuit, noisy_result: QuasiDistr, nShots : int) -> float:
+def get_fidelity(circuit: QuantumCircuit, backend: BackendV2, nShots : int) -> float:
     ideal_result = QuasiDistr.from_counts(
         AerSimulator().run(circuit, shots=nShots).result().get_counts()
     )
-    return ideal_result, hellinger_fidelity(ideal_result, noisy_result)
+    noisy_result = QuasiDistr.from_counts(
+        backend.run(circuit, shots=nShots).result().get_counts()
+    )
+    return hellinger_fidelity(ideal_result, noisy_result)
+def calculate_fidelity(ideal_result: QuasiDistr, noisy_result: QuasiDistr) -> float:
+    return hellinger_fidelity(ideal_result, noisy_result)
 
 # TODO: there're multiple models. how to handle them?!
 modelStatus = s.check()
 endTime = datetime.datetime.now()
-print(f"start time: {endTime}")
-print(f"finish time: {endTime-startTime}")
+print(f"end time: {endTime}")
+print(f"time elapsed: {endTime-startTime}")
 print(f"{modelStatus}\n")
 if modelStatus != sat:
     print(f"model is not satisfied. Exiting ...")
@@ -423,31 +429,35 @@ def _wire_cuts_to_moves(dag: DAG, nWireCuts: int) -> None:
                 qubit_mapping[instr.qubits[0]] = instr.qubits[1]
                 cut_ctr += 1
 
-beforeCutDag = circuit_to_dag(sanitizedCirc)
+beforeCutDag = circuit_to_dag(decomposedCirc)
 markedDag = markCutEdges(beforeCutDag)
 markedCirc = dag_to_circuit(markedDag)
-markedCirc.measure_all()
-sanitizedCirc.measure_all()
 markedQvmDag = DAG(markedCirc)
 _wire_cuts_to_moves(markedQvmDag, m[nWireCuts].as_long())
 markedQvmDag.fragment()
 cuttedCirc = markedQvmDag.to_circuit()
 
 ################# MAIN ###################
-circuitsToDraw = [sanitizedCirc, markedCirc, cuttedCirc]
+circuitsToDraw = [decomposedCirc, markedCirc, cuttedCirc]
 dagsToDraw = []
 printModel(m)
 
 nShots = 10000
-virtualCirc = VirtualCircuit(cuttedCirc)
-result, _ = run_virtual_circuit(virtualCirc, shots=nShots)
-idealResult, fidelity = calculate_fidelity(sanitizedCirc, result, nShots)
-print(f"result fidelity: {fidelity}")
-print(f"ideal_result: {idealResult}")
-print(f"noisy_result: {result}")
+backend = FakeKolkataV2()
+
+print("Circuits will be run to calculate fidelity...")
+
+virtualCuttedCirc = VirtualCircuit(cuttedCirc)
+virtualCircuitIdealResult, _ = run_virtual_circuit(virtualCuttedCirc, shots=nShots)
+virtualCuttedCirc.set_backend_for_all(backend)
+virtualCircuitNoisyResult, _ = run_virtual_circuit(virtualCuttedCirc, shots=nShots)
+uncuttedCircFidelity = get_fidelity(decomposedCirc, backend, nShots)
+
+print(f"uncuttedCircFidelity: {uncuttedCircFidelity}")
+print(f"cuttedCircFidelity: {calculate_fidelity(virtualCircuitIdealResult, virtualCircuitNoisyResult)}")
 
 if BENCHMARK_RUNNING:
-    saveCircuit(sanitizedCirc, BENCHMARK_DIR, "original")
-    saveCircuit(resultCirc, BENCHMARK_DIR, "cutted")
+    saveCircuit(decomposedCirc, BENCHMARK_DIR, "original")
+    saveCircuit(cuttedCirc, BENCHMARK_DIR, "cutted")
 else:
     outputCircuitPic(circuitsToDraw, False, dagsToDraw)
