@@ -33,7 +33,7 @@ if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
     CIRC_NAME = str(sys.argv[5])
     CIRC_N_QUBITS = int(sys.argv[6])
     CIRC_DEPTH = int(sys.argv[7])
-    BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}"
+    BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}_{BENCHMARK_MAX_PARTITIONS}"
     pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
 
 
