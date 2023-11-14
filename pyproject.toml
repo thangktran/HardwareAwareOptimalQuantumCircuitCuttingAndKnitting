@@ -1,0 +1,24 @@
+[project]
+name = "HardwareAwareOptimalQuantumCircuitCuttingAndKnitting"
+version = "0.0.0"
+description = ""
+authors = [
+    {name = "Thang Tran", email = "trankimthang279@gmail.com"},
+]
+dependencies = [
+    "z3-solver==4.12.2.0",
+    "qiskit==0.44.2",
+    "qiskit-aer==0.13.0",
+    "matplotlib==3.8.0",
+    "pylatexenc==2.10",
+    "networkx==3.2.1",
+    "Quantum-Virtual-Machine @ file:///${PROJECT_ROOT}/third_party/qvm",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+

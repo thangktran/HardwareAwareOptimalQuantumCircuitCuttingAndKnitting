@@ -187,8 +187,10 @@ pyrightconfig.json
 .history
 .ionide
 
-benchmark_result
+benchmark_results/
 *.log
+
+.pdm-python
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,python
 
