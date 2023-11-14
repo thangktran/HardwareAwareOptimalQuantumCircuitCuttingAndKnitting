@@ -199,8 +199,6 @@ class Cutter:
         self.o_vp = []
         # circuit is cut at edge e
         self.c_e = []
-        # circuit is simultanously cut at edge e
-        self.b_e = []
         # total number of qubits in partition p
         self.Q_p = []
         # Q is maximum number of qubit per partition
@@ -236,6 +234,12 @@ class Cutter:
             var.edgeType = EdgeType.WireCut
             self.c_e.append(var)
         for eIdx in range(len(self.G)):
+            u, _ = self.G[eIdx]
+            vertex = self.V[u]
+            # This is not part of the original paper.
+            # If a gate is not supported for Virtualization => Don't cut it.
+            if vertex.opNode.op.name not in VIRTUAL_GATE_TYPES:
+                continue
             variableName = f"c_{eIdx}[G]_{self.G[eIdx][0]}_{self.G[eIdx][1]}"
             var = Bool(variableName)
             # z3.Bool doesn't have these properties
@@ -244,25 +248,6 @@ class Cutter:
             var.edge = self.G[eIdx]
             var.edgeType = EdgeType.GateCut
             self.c_e.append(var)
-        # populate b_e
-        for eIdx in range(len(self.W)):
-            variableName = f"b_{eIdx}[W]_{self.W[eIdx][0]}_{self.W[eIdx][1]}"
-            var = Bool(variableName)
-            # z3.Bool doesn't have these properties
-            # we add them to make it simpler to retrieve.
-            var.eIdx = eIdx
-            var.edge = self.W[eIdx]
-            var.edgeType = EdgeType.WireCut
-            self.b_e.append(var)
-        for eIdx in range(len(self.G)):
-            variableName = f"b_{eIdx}[G]_{self.G[eIdx][0]}_{self.G[eIdx][1]}"
-            var = Bool(variableName)
-            # z3.Bool doesn't have these properties
-            # we add them to make it simpler to retrieve.
-            var.eIdx = eIdx
-            var.edge = self.G[eIdx]
-            var.edgeType = EdgeType.GateCut
-            self.b_e.append(var)
         assert(self.maxNPartitions <= len(self.V))
         # populate Q_p
         for pIdx in range(self.maxNPartitions):
@@ -298,9 +283,6 @@ class Cutter:
                 variables.append(var)
             self.s.add(Or(variables))
 
-        # b_e imply c_e
-        self.s.add([Implies(self.b_e[idx], self.c_e[idx]) for idx in range(len(self.b_e))])
-
         # Q_p constraints
         for pIdx in range(self.maxNPartitions):
             firstSumTerm = []
@@ -321,13 +303,8 @@ class Cutter:
                 o_vpVar = self.o_var_lookup[v][pIdx]
                 secondSumTerm.append(If(And(c_eVar, o_vpVar), 1, 0))
 
-            # third sum term
-            for b_eVar in self.b_e:
-                u, v = b_eVar.edge
-                o_vpVar = self.o_var_lookup[v][pIdx]
-                o_upVar = self.o_var_lookup[u][pIdx]
-                thirdSumTerm.append(If(And(b_eVar, Or(o_vpVar, o_upVar)), 1, 0))
-
+            # third sum term is removed since we don't use b_e as in the original paper.
+            
             self.s.add(self.Q_p[pIdx] == Sum(firstSumTerm+secondSumTerm+thirdSumTerm))
             
         GATE_CUT_COST = 6
