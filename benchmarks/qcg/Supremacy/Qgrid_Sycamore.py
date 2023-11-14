@@ -133,13 +133,13 @@ class Qgrid:
     def apply_random_1q_gate(self, n, m):
         qb_index = self.get_index(n, m)
         gate = self.grid[n][m].random_gate()
-        if gate is "X":
+        if gate == "X":
             # Apply a sqrt-X gate to qubit at qb_index
             self.circ.rx(math.pi / 2, self.qreg[qb_index])
-        elif gate is "Y":
+        elif gate == "Y":
             # Apply a sqrt-Y gate to qubit at qb_index
             self.circ.ry(math.pi / 2, self.qreg[qb_index])
-        elif gate is "W":
+        elif gate == "W":
             # Apply a sqrt-W gate to qubit at qb_index
             # W = (X + Y) / sqrt(2)
             self.circ.z(self.qreg[qb_index])

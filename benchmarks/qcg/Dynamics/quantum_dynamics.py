@@ -75,9 +75,9 @@ class Dynamics:
             string of the form 'p1p2p3...pN' where pK is a Pauli matrix
         """
         for i, pauli in enumerate(pauli_str):
-            if pauli is "X":
+            if pauli == "X":
                 self.circ.h(self.qr[i])
-            elif pauli is "Y":
+            elif pauli == "Y":
                 self.circ.h(self.qr[i])
                 self.circ.s(self.qr[i])
 
@@ -92,9 +92,9 @@ class Dynamics:
             string of the form 'p1p2p3...pN' where pK is a Pauli matrix
         """
         for i, pauli in enumerate(pauli_str):
-            if pauli is "X":
+            if pauli == "X":
                 self.circ.h(self.qr[i])
-            elif pauli is "Y":
+            elif pauli == "Y":
                 self.circ.sdg(self.qr[i])
                 self.circ.h(self.qr[i])
 
