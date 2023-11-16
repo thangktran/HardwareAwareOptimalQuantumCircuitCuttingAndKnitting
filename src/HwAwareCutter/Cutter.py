@@ -54,7 +54,7 @@ class Cutter:
     # Return False otherwise.
     # If there're multiple solutions, each call to this function
     # will assign a different model to the internal variable.
-    # After calling `solve()` and a True is returned, call `getCuttedCirc()` to get cutted circuit
+    # After calling `solve()` and a True is returned, call `getCutCirc()` to get cut circuit
     # and/or call `getModelKeyResuts()` to get solution key results.
     def solve(self) -> bool:
         self.nWireCuts = 0
@@ -80,10 +80,10 @@ class Cutter:
         return True
 
 
-    # return decomposed-circuit, cut-marked-circuit, and cutted-circuit
+    # return decomposed-circuit, cut-marked-circuit, and cut-circuit
     # FIXME: this function now only works if it's called once after `solve()`.
     # i.e. calling this in a `while Cutter().solve():` does NOT work at the moment.
-    def getCuttedCirc(self) -> Tuple[QuantumCircuit, QuantumCircuit, QuantumCircuit]:
+    def getCutCirc(self) -> Tuple[QuantumCircuit, QuantumCircuit, QuantumCircuit]:
         if self.model is None:
             raise RuntimeError("no model exists")
 

@@ -17,7 +17,7 @@ inputCirc.measure_all()
 cutter = Cutter(inputCirc=inputCirc, maxNPartitions=2, maxNQubitsPerPartition=10, forceWireCut=True)
 
 cutter.solve()
-decomposedCirc, markedCirc, cuttedCirc = cutter.getCuttedCirc()
+decomposedCirc, markedCirc, cutCirc = cutter.getCutCirc()
 S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResuts()
 
 print(f"S: {S}")
@@ -30,10 +30,10 @@ for idx, Q_pi in enumerate(Q_pArr):
 nShots = 10000
 backend = FakeKolkataV2()
 
-inputCircFidelity, cuttedCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCuttedCirc(inputCirc, cuttedCirc, backend, nShots)
+inputCircFidelity, cutCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCutCirc(inputCirc, cutCirc, backend, nShots)
 
 print(f"inputCircFidelity: {inputCircFidelity}")
-print(f"cuttedCircFidelity: {cuttedCircFidelity}")
+print(f"cutCircFidelity: {cutCircFidelity}")
 print(f"idealResultDiff: {idealResultDiff}")
 
-Utilities.showCircuitsAndDags(circuits=[decomposedCirc, markedCirc, cuttedCirc], dags=[])
+Utilities.showCircuitsAndDags(circuits=[decomposedCirc, markedCirc, cutCirc], dags=[])

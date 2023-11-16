@@ -67,7 +67,7 @@ def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots
 
 # same as getCircResultFromBackend(), but this function
 # will turn circuit into a virtualCirc and run it.
-def getVirtualCircResultFromBackend(cuttedCircuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
+def getVirtualCircResultFromBackend(cutCircuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
     
     def workerTask(virtualCirc : VirtualCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
         print(f"getVirtualCircResultFromBackend {backend}")
@@ -77,8 +77,8 @@ def getVirtualCircResultFromBackend(cuttedCircuit: QuantumCircuit, backend: Back
     results = {}
     simulatorBackend = AerSimulator()
 
-    idealSimulatorThread = threading.Thread(target=workerTask, args=[VirtualCircuit(cuttedCircuit.copy()), simulatorBackend, nShots, results])
-    noisyBackendThread = threading.Thread(target=workerTask, args=[VirtualCircuit(cuttedCircuit.copy()), backend, nShots, results])
+    idealSimulatorThread = threading.Thread(target=workerTask, args=[VirtualCircuit(cutCircuit.copy()), simulatorBackend, nShots, results])
+    noisyBackendThread = threading.Thread(target=workerTask, args=[VirtualCircuit(cutCircuit.copy()), backend, nShots, results])
 
     idealSimulatorThread.start()
     noisyBackendThread.start()
@@ -98,8 +98,8 @@ def getVirtualCircResultFromBackend(cuttedCircuit: QuantumCircuit, backend: Back
     return results[simulatorBackend], results[backend]
 
 
-# return originalCircFidelity, cuttedCircFidelity, idealResultDiff
-def compareOriginalCircWithCuttedCirc(originalCirc : QuantumCircuit, cuttedCirc : QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[float, float, float]:
+# return originalCircFidelity, cutCircFidelity, idealResultDiff
+def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[float, float, float]:
     results = {}
 
     def originalCircTask(originalCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
@@ -107,34 +107,34 @@ def compareOriginalCircWithCuttedCirc(originalCirc : QuantumCircuit, cuttedCirc 
         idealResult, noisyResult = getCircResultFromBackend(originalCirc, backend, nShots)
         results[originalCirc.name] = (idealResult, noisyResult)
 
-    def cuttedCircTask(cuttedCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
-        print("cuttedCircTask")
-        idealResult, noisyResult = getVirtualCircResultFromBackend(cuttedCirc, backend, nShots)
-        results[cuttedCirc.name] = (idealResult, noisyResult)
+    def cutCircTask(cutCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
+        print("cutCircTask")
+        idealResult, noisyResult = getVirtualCircResultFromBackend(cutCirc, backend, nShots)
+        results[cutCirc.name] = (idealResult, noisyResult)
 
     originalCircThread = threading.Thread(target=originalCircTask, args=[originalCirc, backend, nShots, results])
-    cuttedCircThread = threading.Thread(target=cuttedCircTask, args=[cuttedCirc, backend, nShots, results])
+    cutCircThread = threading.Thread(target=cutCircTask, args=[cutCirc, backend, nShots, results])
 
     originalCircThread.start()
-    cuttedCircThread.start()
+    cutCircThread.start()
 
     try:
-        while originalCircThread.is_alive() or cuttedCircThread.is_alive():
+        while originalCircThread.is_alive() or cutCircThread.is_alive():
             if originalCircThread.is_alive():
                 originalCircThread.join(0.5)
-            if cuttedCircThread.is_alive():
-                cuttedCircThread.join(0.5)
+            if cutCircThread.is_alive():
+                cutCircThread.join(0.5)
     except (KeyboardInterrupt, SystemExit):
         sys.exit(0)
 
     originalCircThread.join()
-    cuttedCircThread.join()
+    cutCircThread.join()
 
     inputCircIdealResult, inputCircNoisyResult = results[originalCirc.name]
-    cuttedCircIdealResult, cuttedCircNoisyResult = results[cuttedCirc.name]
+    cutCircIdealResult, cutCircNoisyResult = results[cutCirc.name]
 
     inputCircFidelity = hellinger_fidelity(inputCircIdealResult, inputCircNoisyResult)
-    cuttedCircFidelity = hellinger_fidelity(cuttedCircIdealResult, cuttedCircNoisyResult)
-    idealResultDiff = hellinger_fidelity(inputCircIdealResult, cuttedCircIdealResult)
+    cutCircFidelity = hellinger_fidelity(cutCircIdealResult, cutCircNoisyResult)
+    idealResultDiff = hellinger_fidelity(inputCircIdealResult, cutCircIdealResult)
 
-    return inputCircFidelity, cuttedCircFidelity, idealResultDiff
+    return inputCircFidelity, cutCircFidelity, idealResultDiff

@@ -107,7 +107,7 @@ print(f"success : {success}\n")
 if not success:
     sys.exit(0)
 
-decomposedCirc, markedCirc, cuttedCirc = cutter.getCuttedCirc()
+decomposedCirc, markedCirc, cutCirc = cutter.getCutCirc()
 S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResuts()
 
 print(f"S: {S}")
@@ -124,16 +124,16 @@ print()
 print("Circuits will be run to calculate fidelity...")
 print()
 
-inputCircFidelity, cuttedCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCuttedCirc(decomposedCirc, cuttedCirc, backend, nShots)
+inputCircFidelity, cutCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCutCirc(decomposedCirc, cutCirc, backend, nShots)
 
 print(f"inputCircFidelity: {inputCircFidelity}")
-print(f"cuttedCircFidelity: {cuttedCircFidelity}")
+print(f"cutCircFidelity: {cutCircFidelity}")
 print(f"idealResultDiff: {idealResultDiff}")
 
 
 if BENCHMARK_RUNNING:
     Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
     Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
-    Utilities.saveCircuit(cuttedCirc, BENCHMARK_DIR, "3_cuttedCirc")
+    Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
 else:
-    Utilities.showCircuitsAndDags(circuits=[decomposedCirc, markedCirc, cuttedCirc], dags=[])
+    Utilities.showCircuitsAndDags(circuits=[decomposedCirc, markedCirc, cutCirc], dags=[])
