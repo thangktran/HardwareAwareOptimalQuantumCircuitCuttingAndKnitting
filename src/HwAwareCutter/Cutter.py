@@ -90,7 +90,7 @@ class Cutter:
         decomposedCirc = self.decomposedCirc
         beforeCutDag = circuit_to_dag(decomposedCirc)
         
-        markedDag = self._markCutEdges(beforeCutDag)
+        markedDag = self._repaceGateCutsAndMarkWireCuts(beforeCutDag)
         markedCirc = dag_to_circuit(markedDag)
         markedQvmDag = DAG(markedCirc)
 
@@ -331,7 +331,7 @@ class Cutter:
         self.s.minimize(self.S)
         
     
-    def _markCutEdges(self, dag : DAGCircuit) -> DAGCircuit:
+    def _repaceGateCutsAndMarkWireCuts(self, dag : DAGCircuit) -> DAGCircuit:
         for c_eVar in self.c_e:
             if not is_true(self.model[c_eVar]):
                 continue
@@ -340,11 +340,16 @@ class Cutter:
             v = self.V[vIdx]
             if c_eVar.edgeType == EdgeType.GateCut:
                 dag.substitute_node(u.opNode, VIRTUAL_GATE_TYPES[v.opNode.name](u.opNode.op, f"{v.opNode.name} {v.opNode.op.label}"))
+                print(f"GateCut {v.opNode.name} {v.opNode.op.label} is replaced.")
             elif c_eVar.edgeType == EdgeType.WireCut:
                 newDag = DAGCircuit()
                 newDag.add_qubits(u.opNode.qargs)
                 newDag.apply_operation_back(op=u.opNode.op, qargs=u.opNode.qargs)
-                newDag.apply_operation_back(op=WireCut(1, f"WireCut {str(c_eVar)}"), qargs=[u.qubit])
+                wireCutLabel = f"{uIdx}_{vIdx}"
+                wirecutOp = WireCut(1, f"WC {wireCutLabel}")
+                wirecutOp.wireCutLabel = wireCutLabel
+                newDag.apply_operation_back(op=wirecutOp, qargs=[u.qubit])
+                print(f"WireCut {wireCutLabel} is marked.")
                 newNodesMap = dag.substitute_node_with_dag(u.opNode, newDag)
                 newNode = [*newNodesMap.values()][0]
                 u0 = self.V[u.opNodeV0Idx]
@@ -374,7 +379,7 @@ class Cutter:
                 instr = dag.get_node_instr(node)
                 instr.qubits = [_find_qubit(qubit) for qubit in instr.qubits]
                 if isinstance(instr.operation, WireCut):
-                    instr.operation = VirtualMove(SwapGate(label=instr.operation.label))
+                    instr.operation = VirtualMove(SwapGate(label=instr.operation.wireCutLabel))
                     instr.qubits.append(move_reg[cut_ctr])
                     qubit_mapping[instr.qubits[0]] = instr.qubits[1]
                     cut_ctr += 1
