@@ -339,7 +339,7 @@ class Cutter:
             u = self.V[uIdx]
             v = self.V[vIdx]
             if c_eVar.edgeType == EdgeType.GateCut:
-                dag.substitute_node(v.opNode, VIRTUAL_GATE_TYPES[v.opNode.name](v.opNode.op, f"VirtualGate {str(c_eVar)}"))
+                dag.substitute_node(u.opNode, VIRTUAL_GATE_TYPES[v.opNode.name](u.opNode.op, f"{v.opNode.name} {v.opNode.op.label}"))
             elif c_eVar.edgeType == EdgeType.WireCut:
                 newDag = DAGCircuit()
                 newDag.add_qubits(u.opNode.qargs)

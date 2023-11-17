@@ -224,8 +224,8 @@ RZZ_ACCURACY = 0.00001
 
 
 class VirtualRZZ(VirtualBinaryGate):
-    def __init__(self, original_gate: Gate):
-        super().__init__(original_gate)
+    def __init__(self, original_gate: Gate, label : str):
+        super().__init__(original_gate, label)
 
     def _instantiations(self) -> list[QuantumCircuit]:
         inst0 = QuantumCircuit(2, 1)
@@ -292,8 +292,8 @@ class VirtualRZZ(VirtualBinaryGate):
 
 
 class VirtualCPhase(VirtualRZZ):
-    def __init__(self, original_gate: Gate):
-        super().__init__(original_gate)
+    def __init__(self, original_gate: Gate, label : str):
+        super().__init__(original_gate, label)
         self._params[0] = -self._params[0] / 2
 
     def _instantiations(self) -> list[QuantumCircuit]:
