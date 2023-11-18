@@ -19,27 +19,23 @@ from HwAwareCutter.Logger import Logger
 
 BENCHMARK_MAX_PARTITIONS = 2
 BENCHMARK_MAX_N_QUBITS = 10
-BENCHMARK_RUNNING = False
 BENCHMARK_DIR = ""
 CIRC_NAME = "ghz"
 CIRC_N_QUBITS = 5
-CIRC_DEPTH = 4
+CIRC_DEPTH = 1
 
 # usage: python benchmark.py -p 2 -q 10 [ran|sup|su|ghz] <nQubit> <nDepth>
 # su doesn't need nDepth parameter, but a dummy 0 should be use
 if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
-    BENCHMARK_RUNNING = True
     BENCHMARK_MAX_PARTITIONS = int(sys.argv[2])
     BENCHMARK_MAX_N_QUBITS = int(sys.argv[4])
     CIRC_NAME = str(sys.argv[5]).lower()
     CIRC_N_QUBITS = int(sys.argv[6])
     CIRC_DEPTH = int(sys.argv[7])
-    BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}_{BENCHMARK_MAX_PARTITIONS}"
-    pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
 
-LOG_FILE = None
-if len(BENCHMARK_DIR) != 0:
-    LOG_FILE = pathlib.Path(BENCHMARK_DIR) / "run.log"
+BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}_{BENCHMARK_MAX_PARTITIONS}_{datetime.datetime.now()}"
+pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
+LOG_FILE = pathlib.Path(BENCHMARK_DIR) / "run.log"
 
 Logger().configureLoggers(LOG_FILE)
 logger = Logger().getLogger()
@@ -136,10 +132,6 @@ logger.info(f"inputCircFidelity: {inputCircFidelity}")
 logger.info(f"cutCircFidelity: {cutCircFidelity}")
 logger.info(f"idealResultDiff: {idealResultDiff}")
 
-
-if BENCHMARK_RUNNING:
-    Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
-    Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
-    Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
-else:
-    Utilities.showCircuitsAndDags(circuits=[decomposedCirc, markedCirc, cutCirc], dags=[])
+Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
+Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
+Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
