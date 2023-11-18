@@ -32,12 +32,19 @@ class EdgeType(Enum):
 
 
 class Cutter:
-    def __init__(self, inputCirc : QuantumCircuit, decomposeOptimizationLevel = 0, maxNPartitions : int = 2, maxNQubitsPerPartition : int = 10, forceWireCut = False) -> None:
+    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int = 10, forceNWireCut : int | None = None, forceNGateCut : int | None = None) -> None:
         # TODO: put logging for info here?
         self.inputCirc = inputCirc
         self.maxNPartitions = maxNPartitions
         self.maxNQubitsPerPartition = maxNQubitsPerPartition
-        self.forceWireCut = forceWireCut
+        self.forceNWireCut = None
+        if forceNWireCut is not None:
+            assert(forceNWireCut>0)
+            self.forceNWireCut = forceNWireCut
+        self.forceNGateCut = None
+        if forceNGateCut is not None:
+            assert(forceNGateCut>0)
+            self.forceNGateCut = forceNGateCut
         self.decomposedCirc = inputCirc.decompose()
         self.V, self.W, self.G, self.I = self._readCirc(self.decomposedCirc)
 
@@ -321,10 +328,14 @@ class Cutter:
         for pIdx in range(self.maxNPartitions):
             self.s.add(self.Q >= self.Q_p[pIdx])
         
-        # helper constraints : force wire cut.
-        if self.forceWireCut:
+        # helper constraints : force N wire cuts.
+        if self.forceNWireCut is not None:
             sumWireCuts = [If(And(self.c_e[idx], self.c_e[idx].edgeType == EdgeType.WireCut), 1, 0) for idx in range(len(self.c_e))]
-            self.s.add(Sum(sumWireCuts) > 0)
+            self.s.add(Sum(sumWireCuts) == self.forceNWireCut)
+        # helper constraints : force N gate cuts.
+        if self.forceNGateCut is not None:
+            sumGateCuts = [If(And(self.c_e[idx], self.c_e[idx].edgeType == EdgeType.GateCut), 1, 0) for idx in range(len(self.c_e))]
+            self.s.add(Sum(sumGateCuts) == self.forceNGateCut)
 
         # objectives
         self.s.minimize(self.Q)

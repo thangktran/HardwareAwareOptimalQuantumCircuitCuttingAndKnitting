@@ -20,11 +20,11 @@ BENCHMARK_MAX_PARTITIONS = 2
 BENCHMARK_MAX_N_QUBITS = 10
 BENCHMARK_RUNNING = False
 BENCHMARK_DIR = ""
-CIRC_NAME = "test"
+CIRC_NAME = "ghz"
 CIRC_N_QUBITS = 5
 CIRC_DEPTH = 4
 
-# usage: python benchmark.py -p 2 -q 10 [ran|sup|su] <nQubit> <nDepth>
+# usage: python benchmark.py -p 2 -q 10 [ran|sup|su|ghz] <nQubit> <nDepth>
 # su doesn't need nDepth parameter, but a dummy 0 should be use
 if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
     BENCHMARK_RUNNING = True
@@ -37,22 +37,12 @@ if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
     pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
 
 
-def defaultTestCircuit():
-    inputCirc = QuantumCircuit(CIRC_N_QUBITS, CIRC_N_QUBITS)
-    inputCirc.cx(0, 1)
-    inputCirc.cx(0, 2)
-    inputCirc.h(0)
-    inputCirc.cx(0, 1)
-    inputCirc.cx(1, 2)
-    inputCirc.cx(0, 1)
-    inputCirc.measure_all()
-    print(f"test circuit with {CIRC_N_QUBITS} qubits is generated")
-    return inputCirc
 def generateRandomCircuit():
     inputCirc = random_circuit(CIRC_N_QUBITS, CIRC_DEPTH) # (5,4) most of the time result in a wire cut
     inputCirc.measure_all()
     print(f"random circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
     return inputCirc
+
 def generateSupremacy():
     def factor_int(n):
         nsqrt = math.ceil(math.sqrt(n))
@@ -69,6 +59,7 @@ def generateSupremacy():
     inputCirc.measure_all()
     print(f"supremacy circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
     return inputCirc
+
 def generateEfficientSu2():
     entanglement = "linear"
     inputCirc = EfficientSU2(CIRC_N_QUBITS, entanglement=entanglement, reps=2)
@@ -79,19 +70,28 @@ def generateEfficientSu2():
     print(f"EfficientSU2 circuit with {CIRC_N_QUBITS} qubits & {entanglement} entanglement is generated")
     return inputCirc
 
-if CIRC_NAME == "test":
-    inputCirc = defaultTestCircuit()
-elif CIRC_NAME == "ran":
+def generateGhz():
+    inputCirc = QuantumCircuit(CIRC_N_QUBITS, CIRC_N_QUBITS)
+    inputCirc.h(0)
+    for i in range(1, CIRC_N_QUBITS):
+        inputCirc.cx(i - 1, i)
+    inputCirc.measure_all()
+    print(f"linear GHZ state circuit with {CIRC_N_QUBITS} qubits is generated")
+    return inputCirc
+
+if CIRC_NAME == "ran":
     inputCirc = generateRandomCircuit()
 elif CIRC_NAME == "sup":
     inputCirc = generateSupremacy()
 elif CIRC_NAME == "su":
     inputCirc = generateEfficientSu2()
+elif CIRC_NAME == "ghz":
+    inputCirc = generateGhz()
 else:
     raise RuntimeError("CIRC_NAME {CIRC_NAME} is not supported")
 
 
-cutter = Cutter(inputCirc=inputCirc, decomposeOptimizationLevel=3, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceWireCut=False)
+cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCut=None, forceNGateCut=None)
 
 startTime = datetime.datetime.now()
 print(f"start solving time: {startTime}")
