@@ -15,6 +15,8 @@ from qvm.quasi_distr import QuasiDistr
 from qvm.run import run_virtual_circuit
 from qvm.virtual_circuit import VirtualCircuit
 
+from HwAwareCutter.Logger import Logger
+
 
 def showCircuitsAndDags(circuits : List[QuantumCircuit] = [], dags : List[DAGCircuit]= []) -> None:
     for c in circuits:
@@ -36,7 +38,7 @@ def saveCircuit(circ : QuantumCircuit, dir : str, name : str) -> None:
 def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
     
     def workerTask(circuit : QuantumCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
-        print(f"getCircResultFromBackend {backend}")
+        Logger().getLogger(__name__).debug(f"getCircResultFromBackend {backend}")
         resultsMap[backend] = QuasiDistr.from_counts(
             backend.run(circuit, shots=nShots).result().get_counts()
         )
@@ -70,7 +72,7 @@ def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots
 def getVirtualCircResultFromBackend(cutCircuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
     
     def workerTask(virtualCirc : VirtualCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
-        print(f"getVirtualCircResultFromBackend {backend}")
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend}")
         virtualCirc.set_backend_for_all(backend)
         resultsMap[backend], _ = run_virtual_circuit(virtualCirc, shots=nShots)
 
@@ -103,12 +105,12 @@ def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : Quan
     results = {}
 
     def originalCircTask(originalCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
-        print("originalCircTask")
+        Logger().getLogger(__name__).debug("originalCircTask")
         idealResult, noisyResult = getCircResultFromBackend(originalCirc, backend, nShots)
         results[originalCirc.name] = (idealResult, noisyResult)
 
     def cutCircTask(cutCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
-        print("cutCircTask")
+        Logger().getLogger(__name__).debug("cutCircTask")
         idealResult, noisyResult = getVirtualCircResultFromBackend(cutCirc, backend, nShots)
         results[cutCirc.name] = (idealResult, noisyResult)
 

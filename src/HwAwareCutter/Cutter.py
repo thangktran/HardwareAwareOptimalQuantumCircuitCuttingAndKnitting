@@ -16,6 +16,8 @@ from qiskit.dagcircuit.dagcircuit import DAGCircuit
 from qvm.compiler.dag import DAG
 from qvm.virtual_gates import VirtualMove, WireCut, VIRTUAL_GATE_TYPES
 
+from HwAwareCutter.Logger import Logger
+
 
 # Helper classes
 @dataclass
@@ -33,7 +35,7 @@ class EdgeType(Enum):
 
 class Cutter:
     def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int = 10, forceNWireCut : int | None = None, forceNGateCut : int | None = None) -> None:
-        # TODO: put logging for info here?
+        self.logger = Logger().getLogger(__name__)
         self.inputCirc = inputCirc
         self.maxNPartitions = maxNPartitions
         self.maxNQubitsPerPartition = maxNQubitsPerPartition
@@ -108,7 +110,7 @@ class Cutter:
 
     
     # return S, nWireCuts, nGateCuts, Q, [Q_p1, Q_p2, ..., Q_pn]
-    def getModelKeyResuts(self) -> Tuple[int, int, int, int, List[int]]:
+    def getModelKeyResults(self) -> Tuple[int, int, int, int, List[int]]:
         if self.model is None:
             raise RuntimeError("no model exists")
             
@@ -119,6 +121,14 @@ class Cutter:
             Q_pArr.append( self.model[self.Q_p[pIdx]].as_long() )
         
         return S, self.nWireCuts, self.nGateCuts, Q, Q_pArr
+
+    
+    def logOptimizerResults(self) -> None:
+        self.logger.debug("O_vp results: ")
+
+        for o_vpVar in self.o_vp:
+            if is_true(self.model[o_vpVar]):
+                self.logger.debug(f"    {str(o_vpVar)} = True")
 
 
     # read circuit and return V, W, G, I according to the paper
@@ -351,7 +361,7 @@ class Cutter:
             v = self.V[vIdx]
             if c_eVar.edgeType == EdgeType.GateCut:
                 dag.substitute_node(u.opNode, VIRTUAL_GATE_TYPES[v.opNode.name](u.opNode.op, f"{v.opNode.name} {v.opNode.op.label}"))
-                print(f"GateCut {v.opNode.name} {v.opNode.op.label} is replaced.")
+                self.logger.info(f"GateCut {v.opNode.name} {v.opNode.op.label} is replaced.")
             elif c_eVar.edgeType == EdgeType.WireCut:
                 newDag = DAGCircuit()
                 newDag.add_qubits(u.opNode.qargs)
@@ -360,7 +370,7 @@ class Cutter:
                 wirecutOp = WireCut(1, f"WC {wireCutLabel}")
                 wirecutOp.wireCutLabel = wireCutLabel
                 newDag.apply_operation_back(op=wirecutOp, qargs=[u.qubit])
-                print(f"WireCut {wireCutLabel} is marked.")
+                self.logger.info(f"WireCut {wireCutLabel} is marked.")
                 newNodesMap = dag.substitute_node_with_dag(u.opNode, newDag)
                 newNode = [*newNodesMap.values()][0]
                 u0 = self.V[u.opNodeV0Idx]

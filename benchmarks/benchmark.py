@@ -14,6 +14,7 @@ from qcg import generators
 
 from HwAwareCutter.Cutter import Cutter
 from HwAwareCutter import Utilities
+from HwAwareCutter.Logger import Logger
 
 
 BENCHMARK_MAX_PARTITIONS = 2
@@ -30,17 +31,23 @@ if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
     BENCHMARK_RUNNING = True
     BENCHMARK_MAX_PARTITIONS = int(sys.argv[2])
     BENCHMARK_MAX_N_QUBITS = int(sys.argv[4])
-    CIRC_NAME = str(sys.argv[5])
+    CIRC_NAME = str(sys.argv[5]).lower()
     CIRC_N_QUBITS = int(sys.argv[6])
     CIRC_DEPTH = int(sys.argv[7])
     BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}_{BENCHMARK_MAX_PARTITIONS}"
     pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
 
+LOG_FILE = None
+if len(BENCHMARK_DIR) != 0:
+    LOG_FILE = pathlib.Path(BENCHMARK_DIR) / "run.log"
+
+Logger().configureLoggers(LOG_FILE)
+logger = Logger().getLogger()
 
 def generateRandomCircuit():
     inputCirc = random_circuit(CIRC_N_QUBITS, CIRC_DEPTH) # (5,4) most of the time result in a wire cut
     inputCirc.measure_all()
-    print(f"random circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    logger.info(f"random circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
     return inputCirc
 
 def generateSupremacy():
@@ -57,7 +64,7 @@ def generateSupremacy():
     assert(abs(i - j) <= 2)
     inputCirc = generators.gen_supremacy(i, j, CIRC_DEPTH * 8)
     inputCirc.measure_all()
-    print(f"supremacy circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    logger.info(f"supremacy circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
     return inputCirc
 
 def generateEfficientSu2():
@@ -67,7 +74,7 @@ def generateEfficientSu2():
         {param: np.random.randn() / 2 for param in inputCirc.parameters}
     )
     inputCirc.measure_all()
-    print(f"EfficientSU2 circuit with {CIRC_N_QUBITS} qubits & {entanglement} entanglement is generated")
+    logger.info(f"EfficientSU2 circuit with {CIRC_N_QUBITS} qubits & {entanglement} entanglement is generated")
     return inputCirc
 
 def generateGhz():
@@ -76,7 +83,7 @@ def generateGhz():
     for i in range(1, CIRC_N_QUBITS):
         inputCirc.cx(i - 1, i)
     inputCirc.measure_all()
-    print(f"linear GHZ state circuit with {CIRC_N_QUBITS} qubits is generated")
+    logger.info(f"linear GHZ state circuit with {CIRC_N_QUBITS} qubits is generated")
     return inputCirc
 
 if CIRC_NAME == "ran":
@@ -94,41 +101,40 @@ else:
 cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCut=None, forceNGateCut=None)
 
 startTime = datetime.datetime.now()
-print(f"start solving time: {startTime}")
+logger.info(f"solving STARTED")
 
 success = cutter.solve()
 
 endTime = datetime.datetime.now()
-print(f"end solving time: {endTime}")
-print(f"solving time elapsed: {endTime-startTime}")
-print()
-print(f"success : {success}\n")
+logger.info(f"solving DONE")
+logger.info(f"solving time elapsed: {endTime-startTime}")
+logger.info(f"success => {success}\n")
 
 if not success:
     sys.exit(0)
 
 decomposedCirc, markedCirc, cutCirc = cutter.getCutCirc()
-S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResuts()
+S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
 
-print(f"S: {S}")
-print(f"Q: {Q}")
-print(f"nWireCuts: {nWireCuts}")
-print(f"nGateCuts: {nGateCuts}")
+logger.info(f"S: {S}")
+logger.info(f"Q: {Q}")
+logger.info(f"nWireCuts: {nWireCuts}")
+logger.info(f"nGateCuts: {nGateCuts}")
 for idx, Q_pi in enumerate(Q_pArr):
-    print(f"Q_p{idx}: {Q_pi}")
+    logger.info(f"Q_p{idx}: {Q_pi}")
+
+cutter.logOptimizerResults()
 
 nShots = 10000
 backend = FakeKolkataV2()
 
-print()
-print("Circuits will be run to calculate fidelity...")
-print()
+logger.info("Circuits will be run to calculate fidelity...")
 
 inputCircFidelity, cutCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCutCirc(decomposedCirc, cutCirc, backend, nShots)
 
-print(f"inputCircFidelity: {inputCircFidelity}")
-print(f"cutCircFidelity: {cutCircFidelity}")
-print(f"idealResultDiff: {idealResultDiff}")
+logger.info(f"inputCircFidelity: {inputCircFidelity}")
+logger.info(f"cutCircFidelity: {cutCircFidelity}")
+logger.info(f"idealResultDiff: {idealResultDiff}")
 
 
 if BENCHMARK_RUNNING:
