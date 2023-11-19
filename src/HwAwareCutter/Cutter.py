@@ -65,6 +65,7 @@ class Cutter:
     # will assign a different model to the internal variable.
     # After calling `solve()` and a True is returned, call `getCutCirc()` to get cut circuit
     # and/or call `getModelKeyResuts()` to get solution key results.
+    # NOTE: solve() might return duplicated solutions.
     def solve(self) -> bool:
         self.nWireCuts = 0
         self.nGateCuts = 0
@@ -90,23 +91,24 @@ class Cutter:
 
 
     # return decomposed-circuit, cut-marked-circuit, and cut-circuit
-    # FIXME: this function now only works if it's called once after `solve()`.
-    # i.e. calling this in a `while Cutter().solve():` does NOT work at the moment.
     def getCutCirc(self) -> Tuple[QuantumCircuit, QuantumCircuit, QuantumCircuit]:
         if self.model is None:
             raise RuntimeError("no model exists")
 
-        decomposedCirc = self.decomposedCirc
-        beforeCutDag = circuit_to_dag(decomposedCirc)
+        copiedDecomposedCirc = self.decomposedCirc.copy()
+        beforeCutDag = circuit_to_dag(copiedDecomposedCirc)
+        # update V
+        V, _, _, _ = self._readCirc(copiedDecomposedCirc)
+
         
-        markedDag = self._repaceGateCutsAndMarkWireCuts(beforeCutDag)
+        markedDag = self._repaceGateCutsAndMarkWireCuts(beforeCutDag, V)
         markedCirc = dag_to_circuit(markedDag)
         markedQvmDag = DAG(markedCirc)
 
         self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
         markedQvmDag.fragment()
 
-        return decomposedCirc, markedCirc, markedQvmDag.to_circuit()
+        return copiedDecomposedCirc, markedCirc, markedQvmDag.to_circuit()
 
     
     # return S, nWireCuts, nGateCuts, Q, [Q_p1, Q_p2, ..., Q_pn]
@@ -352,13 +354,13 @@ class Cutter:
         self.s.minimize(self.S)
         
     
-    def _repaceGateCutsAndMarkWireCuts(self, dag : DAGCircuit) -> DAGCircuit:
+    def _repaceGateCutsAndMarkWireCuts(self, dag : DAGCircuit, V : List[DagVertex]) -> DAGCircuit:
         for c_eVar in self.c_e:
             if not is_true(self.model[c_eVar]):
                 continue
             uIdx, vIdx = c_eVar.edge
-            u = self.V[uIdx]
-            v = self.V[vIdx]
+            u = V[uIdx]
+            v = V[vIdx]
             if c_eVar.edgeType == EdgeType.GateCut:
                 dag.substitute_node(u.opNode, VIRTUAL_GATE_TYPES[v.opNode.name](u.opNode.op, f"{v.opNode.name} {v.opNode.op.label}"))
                 self.logger.info(f"GateCut {v.opNode.name} {v.opNode.op.label} is replaced.")
@@ -373,8 +375,8 @@ class Cutter:
                 self.logger.info(f"WireCut {wireCutLabel} is marked.")
                 newNodesMap = dag.substitute_node_with_dag(u.opNode, newDag)
                 newNode = [*newNodesMap.values()][0]
-                u0 = self.V[u.opNodeV0Idx]
-                u1 = self.V[u.opNodeV1Idx]
+                u0 = V[u.opNodeV0Idx]
+                u1 = V[u.opNodeV1Idx]
                 assert(u.opNode == u0.opNode == u1.opNode)
                 assert(newNode.op.name == u.opNode.op.name == u0.opNode.op.name == u1.opNode.op.name)
                 assert(newNode.op.label == u.opNode.op.label == u0.opNode.op.label == u1.opNode.op.label)
