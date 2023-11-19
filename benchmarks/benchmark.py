@@ -124,7 +124,7 @@ cutter.logOptimizerResults()
 nShots = 10000
 backend = FakeKolkataV2()
 
-logger.info("Circuits will be run to calculate fidelity...")
+logger.info(f"Circuits will be run with {nShots} shots to calculate fidelity...")
 
 inputCircFidelity, cutCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCutCirc(decomposedCirc, cutCirc, backend, nShots)
 

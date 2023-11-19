@@ -8,6 +8,7 @@ from qiskit.circuit import Qubit, QuantumCircuit
 from qiskit.dagcircuit.dagcircuit import DAGCircuit
 from qiskit.providers import BackendV2
 from qiskit.quantum_info import hellinger_fidelity
+from qiskit.visualization import dag_drawer
 from qiskit_aer import AerSimulator
 
 
@@ -134,6 +135,33 @@ def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : Quan
 
     inputCircIdealResult, inputCircNoisyResult = results[originalCirc.name]
     cutCircIdealResult, cutCircNoisyResult = results[cutCirc.name]
+
+    Logger().getLogger(__name__).debug("inputCircIdealResult: ")
+    Logger().getLogger(__name__).debug(dict(sorted(inputCircIdealResult.items())))
+    Logger().getLogger(__name__).debug("cutCircIdealResult: ")
+    Logger().getLogger(__name__).debug(dict(sorted(cutCircIdealResult.items())))
+
+    inputCircIdealResultKeysSet = set(inputCircIdealResult.keys())
+    cutCircIdealResultKeysSet = set(cutCircIdealResult.keys())
+
+    sameKeys = inputCircIdealResultKeysSet.intersection(cutCircIdealResultKeysSet)
+    sameKeysCompare = {}
+    for key in sameKeys:
+        sameKeysCompare[key] = (inputCircIdealResult[key], cutCircIdealResult[key])
+    
+    Logger().getLogger(__name__).debug("sameKeysCompare: ")
+    Logger().getLogger(__name__).debug(dict(sorted(sameKeysCompare.items())))
+    
+    onlyInInputCircuitKeys = inputCircIdealResultKeysSet.difference(cutCircIdealResultKeysSet)
+    onlyInCutCircuitKeys = cutCircIdealResultKeysSet.difference(inputCircIdealResultKeysSet)
+
+    onlyInInputCircuit = {k : inputCircIdealResult[k] for k in onlyInInputCircuitKeys}
+    onlyInCutCircuit = {k : cutCircIdealResult[k] for k in onlyInCutCircuitKeys}
+
+    Logger().getLogger(__name__).debug("onlyInInputCircuit: ")
+    Logger().getLogger(__name__).debug(dict(sorted(onlyInInputCircuit.items())))
+    Logger().getLogger(__name__).debug("onlyInCutCircuit: ")
+    Logger().getLogger(__name__).debug(dict(sorted(onlyInCutCircuit.items())))
 
     inputCircFidelity = hellinger_fidelity(inputCircIdealResult, inputCircNoisyResult)
     cutCircFidelity = hellinger_fidelity(cutCircIdealResult, cutCircNoisyResult)

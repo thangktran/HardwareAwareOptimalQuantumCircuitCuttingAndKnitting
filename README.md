@@ -1,6 +1,7 @@
 - 
 ```
 cd $PROJECT_DIR
+conda create --name <NAME> python=3.10
 pdm sync
 pdm add -e .
 pdm add -e third_party/qvm/ --dev

@@ -26,6 +26,8 @@ class Logger(metaclass=Singleton):
         if moduleName in self.configuredLoggers:
             return logger
 
+        logger.propagate = False
+        
         formatter = logging.Formatter(
         '%(asctime)s | %(name)s [%(threadName)s] |  %(levelname)s: %(message)s')
         logger.setLevel(logging.DEBUG)
