@@ -11,8 +11,7 @@ from qiskit import transpile
 from qvm.virtual_circuit import VirtualCircuit, generate_instantiations
 from qvm.quasi_distr import QuasiDistr
 
-
-logger = logging.getLogger("qvm")
+from HwAwareCutter.Logger import Logger
 
 
 @dataclass
@@ -26,7 +25,7 @@ def run_virtual_circuit(
 ) -> tuple[dict[int, float], RunTimeInfo]:
     jobs: dict[Fragment, Job] = {}
 
-    logger.info(
+    Logger().getLogger(__name__).info(
         f"Running virtualizer with {len(virt.fragment_circuits)} "
         + f"{tuple(circ.num_qubits for circ in virt.fragment_circuits.values())} "
         + f"fragments and {len(virt._vgate_instrs)} vgates..."
@@ -43,7 +42,7 @@ def run_virtual_circuit(
         jobs[frag] = virt.get_backend(frag).run(instantiations, shots=shots)
         #jobs[frag] = backend.run(comp_instantiations, shots=shots)
 
-    logger.info(f"Running {num_instances} instances...")
+    Logger().getLogger(__name__).info(f"Running {num_instances} instances...")
     results = {}
     for frag, job in jobs.items():
         counts = job.result().get_counts()
@@ -52,13 +51,13 @@ def run_virtual_circuit(
 
     run_time = perf_counter() - now
 
-    logger.info(f"Knitting...")
+    Logger().getLogger(__name__).info(f"Knitting...")
 
     with Pool(processes=8) as pool:
         now = perf_counter()
         res_dist = virt.knit(results, pool)
         knit_time = perf_counter() - now
 
-    logger.info(f"Knitted in {knit_time:.2f}s.")
+    Logger().getLogger(__name__).info(f"Knitted in {knit_time:.2f}s.")
 
     return res_dist.nearest_probability_distribution(), RunTimeInfo(run_time, knit_time)

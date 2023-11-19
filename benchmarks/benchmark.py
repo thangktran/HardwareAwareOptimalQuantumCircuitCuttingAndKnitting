@@ -33,7 +33,7 @@ if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
     CIRC_N_QUBITS = int(sys.argv[6])
     CIRC_DEPTH = int(sys.argv[7])
 
-BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}_{BENCHMARK_MAX_PARTITIONS}_{datetime.datetime.now()}"
+BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}_{BENCHMARK_MAX_PARTITIONS}_{BENCHMARK_MAX_N_QUBITS}_{datetime.datetime.now()}"
 pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
 LOG_FILE = pathlib.Path(BENCHMARK_DIR) / "run.log"
 
@@ -104,7 +104,7 @@ success = cutter.solve()
 endTime = datetime.datetime.now()
 logger.info(f"solving DONE")
 logger.info(f"solving time elapsed: {endTime-startTime}")
-logger.info(f"success => {success}\n")
+logger.info(f"success => {success}")
 
 if not success:
     sys.exit(0)

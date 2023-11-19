@@ -22,7 +22,7 @@ cutter = Cutter(inputCirc=inputCirc, maxNPartitions=2, maxNQubitsPerPartition=10
 
 success = cutter.solve()
 
-logger.info(f"success => {success}\n")
+logger.info(f"success => {success}")
 
 if not success:
     sys.exit(0)

@@ -20,16 +20,14 @@ class Logger(metaclass=Singleton):
     def getLogger(self, moduleName : str = "main"):
         if not self.configured:
             raise RuntimeError("Logger is not configured")
-        
-        actualName = f"{self.appName} | {moduleName}"
 
-        logger = logging.getLogger(actualName)
+        logger = logging.getLogger(moduleName)
 
-        if actualName in self.configuredLoggers:
+        if moduleName in self.configuredLoggers:
             return logger
 
         formatter = logging.Formatter(
-        '%(asctime)s | %(name)s |  %(levelname)s: %(message)s')
+        '%(asctime)s | %(name)s [%(threadName)s] |  %(levelname)s: %(message)s')
         logger.setLevel(logging.DEBUG)
 
         stream_handler = logging.StreamHandler()
@@ -44,7 +42,7 @@ class Logger(metaclass=Singleton):
             file_handler.setLevel(logging.DEBUG)
             logger.addHandler(file_handler)
 
-        self.configuredLoggers.add(actualName)
+        self.configuredLoggers.add(moduleName)
 
         return logger
 
