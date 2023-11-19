@@ -1,4 +1,10 @@
-- cd $PROJECT_DIR && && pdm sync && pdm install -e .
+- 
+```
+cd $PROJECT_DIR
+pdm sync
+pdm add -e .
+pdm add -e third_party/qvm/ --dev
+```
 
 - objective with log and exp => Kind of not possible
 ```python

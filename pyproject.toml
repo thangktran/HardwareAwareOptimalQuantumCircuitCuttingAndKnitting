@@ -12,7 +12,6 @@ dependencies = [
     "matplotlib==3.8.0",
     "pylatexenc==2.10",
     "networkx==3.2.1",
-    "Quantum-Virtual-Machine @ file:///${PROJECT_ROOT}/third_party/qvm",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -22,3 +21,7 @@ license = {text = "MIT"}
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e file:///${PROJECT_ROOT}/third_party/qvm#egg=Quantum-Virtual-Machine",
+]
