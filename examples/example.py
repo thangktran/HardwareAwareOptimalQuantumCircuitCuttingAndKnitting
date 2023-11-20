@@ -42,11 +42,11 @@ while cutter.solve():
     nShots = 10000
     backend = FakeKolkataV2()
 
-    inputCircFidelity, cutCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCutCirc(inputCirc, cutCirc, backend, nShots)
+    inputCircFidelity, cutCircFidelity, cutVsUncutFidelity = Utilities.compareOriginalCircWithCutCirc(inputCirc, cutCirc, backend, nShots)
 
     logger.info(f"inputCircFidelity: {inputCircFidelity}")
     logger.info(f"cutCircFidelity: {cutCircFidelity}")
-    logger.info(f"idealResultDiff: {idealResultDiff}")
+    logger.info(f"cutVsUncutFidelity: {cutVsUncutFidelity}")
 
     # Utilities.showCircuitsAndDags(circuits=[decomposedCirc, markedCirc, cutCirc], dags=[])
     Utilities.saveCircuit(decomposedCirc, PATH, "1_decomposedCirc")

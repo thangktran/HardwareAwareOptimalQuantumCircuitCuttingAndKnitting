@@ -101,7 +101,7 @@ def getVirtualCircResultFromBackend(cutCircuit: QuantumCircuit, backend: Backend
     return results[simulatorBackend], results[backend]
 
 
-# return originalCircFidelity, cutCircFidelity, idealResultDiff
+# return originalCircFidelity, cutCircFidelity, cutVsUncutFidelity
 def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[float, float, float]:
     results = {}
 
@@ -165,6 +165,6 @@ def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : Quan
 
     inputCircFidelity = hellinger_fidelity(inputCircIdealResult, inputCircNoisyResult)
     cutCircFidelity = hellinger_fidelity(cutCircIdealResult, cutCircNoisyResult)
-    idealResultDiff = hellinger_fidelity(inputCircIdealResult, cutCircIdealResult)
+    cutVsUncutFidelity = hellinger_fidelity(inputCircIdealResult, cutCircIdealResult)
 
-    return inputCircFidelity, cutCircFidelity, idealResultDiff
+    return inputCircFidelity, cutCircFidelity, cutVsUncutFidelity

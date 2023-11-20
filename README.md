@@ -23,3 +23,31 @@ for idx in range(len(b_e)):
     sumTerms.append(term)
 s.add(S == 10 ** Sum(sumTerms))
 ```
+
+- Circuits result in WireCut: \<CircuitName\> (\<nQubits\>, \<nDepth\>)
+  - BV (5,1)
+  - QFT (5,1)
+  - Random (5,4)
+
+- 
+```
+#!/usr/bin/env bash
+for name in syc hwe bv qft aqft add erd; do
+    for n in 10 16; do
+        python benchmark.py -p 2 -q 10 $name $n 1
+    done
+done
+```
+
+- 
+```
+#!/usr/bin/env bash
+for name in syc hwe bv qft aqft add erd; do
+    python benchmark.py -p 2 -q 10 $name 10 1 &
+    a=$!
+    python benchmark.py -p 2 -q 10 $name 16 1 &
+    b=$!
+    wait $a
+    wait $b
+done
+```

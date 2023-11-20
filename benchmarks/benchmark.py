@@ -10,7 +10,7 @@ from qiskit.circuit.random import random_circuit
 from qiskit.circuit.library import EfficientSU2
 from qiskit.providers.fake_provider import FakeKolkataV2
 
-from qcg import generators
+from helper_functions import generate_circ
 
 from HwAwareCutter.Cutter import Cutter
 from HwAwareCutter import Utilities
@@ -24,7 +24,7 @@ CIRC_NAME = "ghz"
 CIRC_N_QUBITS = 5
 CIRC_DEPTH = 1
 
-# usage: python benchmark.py -p 2 -q 10 [ran|sup|su|ghz] <nQubit> <nDepth>
+# usage: python benchmark.py -p 2 -q 10 [ran|sup|su|ghz|syc|hwe|bv|qft|aqft|add|erd] <nQubit> <nDepth>
 # su doesn't need nDepth parameter, but a dummy 0 should be use
 if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
     BENCHMARK_MAX_PARTITIONS = int(sys.argv[2])
@@ -47,18 +47,7 @@ def generateRandomCircuit():
     return inputCirc
 
 def generateSupremacy():
-    def factor_int(n):
-        nsqrt = math.ceil(math.sqrt(n))
-        val = nsqrt
-        while 1:
-            co_val = int(n / val)
-            if val * co_val == n:
-                return val, co_val
-            else:
-                val -= 1
-    i, j = factor_int(CIRC_N_QUBITS)
-    assert(abs(i - j) <= 2)
-    inputCirc = generators.gen_supremacy(i, j, CIRC_DEPTH * 8)
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "supremacy")
     inputCirc.measure_all()
     logger.info(f"supremacy circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
     return inputCirc
@@ -82,6 +71,48 @@ def generateGhz():
     logger.info(f"linear GHZ state circuit with {CIRC_N_QUBITS} qubits is generated")
     return inputCirc
 
+def generateSycamore():
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "sycamore")
+    inputCirc.measure_all()
+    logger.info(f"sycamore circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    return inputCirc
+
+def generateHwea():
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "hwea")
+    inputCirc.measure_all()
+    logger.info(f"HWEA circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    return inputCirc
+
+def generateBv():
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "bv")
+    inputCirc.measure_all()
+    logger.info(f"BV circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    return inputCirc
+
+def generateQft():
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "qft")
+    inputCirc.measure_all()
+    logger.info(f"QFT circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    return inputCirc
+
+def generateAqft():
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "aqft")
+    inputCirc.measure_all()
+    logger.info(f"AQFT circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    return inputCirc
+
+def generateAdder():
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "adder")
+    inputCirc.measure_all()
+    logger.info(f"Adder circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    return inputCirc
+
+def generateErdos():
+    inputCirc = generate_circ(CIRC_N_QUBITS, CIRC_DEPTH, "erdos")
+    inputCirc.measure_all()
+    logger.info(f"QAOA Erdos circuit with {CIRC_N_QUBITS} qubits & depth of {CIRC_DEPTH} is generated")
+    return inputCirc
+
 if CIRC_NAME == "ran":
     inputCirc = generateRandomCircuit()
 elif CIRC_NAME == "sup":
@@ -90,6 +121,20 @@ elif CIRC_NAME == "su":
     inputCirc = generateEfficientSu2()
 elif CIRC_NAME == "ghz":
     inputCirc = generateGhz()
+elif CIRC_NAME == "syc":
+    inputCirc = generateSycamore()
+elif CIRC_NAME == "hwe":
+    inputCirc = generateHwea()
+elif CIRC_NAME == "bv":
+    inputCirc = generateBv()
+elif CIRC_NAME == "qft":
+    inputCirc = generateQft()
+elif CIRC_NAME == "aqft":
+    inputCirc = generateAqft()
+elif CIRC_NAME == "add":
+    inputCirc = generateAdder()
+elif CIRC_NAME == "erd":
+    inputCirc = generateErdos()
 else:
     raise RuntimeError("CIRC_NAME {CIRC_NAME} is not supported")
 
@@ -126,11 +171,11 @@ backend = FakeKolkataV2()
 
 logger.info(f"Circuits will be run with {nShots} shots to calculate fidelity...")
 
-inputCircFidelity, cutCircFidelity, idealResultDiff = Utilities.compareOriginalCircWithCutCirc(decomposedCirc, cutCirc, backend, nShots)
+inputCircFidelity, cutCircFidelity, cutVsUncutFidelity = Utilities.compareOriginalCircWithCutCirc(decomposedCirc, cutCirc, backend, nShots)
 
 logger.info(f"inputCircFidelity: {inputCircFidelity}")
 logger.info(f"cutCircFidelity: {cutCircFidelity}")
-logger.info(f"idealResultDiff: {idealResultDiff}")
+logger.info(f"cutVsUncutFidelity: {cutVsUncutFidelity}")
 
 Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
 Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
