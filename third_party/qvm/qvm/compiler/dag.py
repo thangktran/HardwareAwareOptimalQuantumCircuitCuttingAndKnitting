@@ -1,4 +1,4 @@
-from typing import Iterator
+from typing import Iterator, List, Set
 import itertools
 from collections import Counter
 
@@ -180,8 +180,9 @@ class DAG(nx.DiGraph):
             if qubit in instr.qubits:
                 yield node
 
-    def fragment(self) -> None:
-        con_qubits = list(nx.connected_components(dag_to_qcg(self)))
+    def fragment(self, fragments : List[Set[Qubit]] | None = None) -> None:
+        con_qubits = fragments if fragments is not None else list(nx.connected_components(dag_to_qcg(self)))
+        
         new_frags = [
             QuantumRegister(len(qubits), name=f"frag{i}")
             for i, qubits in enumerate(con_qubits)

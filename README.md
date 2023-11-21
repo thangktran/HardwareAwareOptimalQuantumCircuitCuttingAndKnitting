@@ -27,6 +27,7 @@ s.add(S == 10 ** Sum(sumTerms))
 - Circuits result in WireCut: \<CircuitName\> (\<nQubits\>, \<nDepth\>)
   - BV (5,1)
   - QFT (5,1)
+  - AQFT (5,1)
   - Random (5,4)
 
 - 
@@ -50,4 +51,59 @@ for name in syc hwe bv qft aqft add erd; do
     wait $a
     wait $b
 done
+```
+
+- bench:
+  - syc (16 5) (32 1)
+  - hwe (16 1) (16 5)
+  - bv (16 1)
+  - qft (5 1) (16 1)
+  - aqft (5 1) (16 1)
+  - add (4 1) (6 1)
+
+-
+```
+#!/usr/bin/env bash
+
+python benchmark.py -p 2 -q 50 syc 16 5 &
+a=$!
+python benchmark.py -p 2 -q 50 syc 32 1 &
+b=$!
+wait $a
+wait $b
+
+python benchmark.py -p 2 -q 50 hwe 16 1 &
+a=$!
+python benchmark.py -p 2 -q 50 hwe 16 5 &
+b=$!
+wait $a
+wait $b
+
+python benchmark.py -p 2 -q 50 bv 16 1 &
+a=$!
+python benchmark.py -p 2 -q 50 bv 16 5 &
+b=$!
+wait $a
+wait $b
+
+python benchmark.py -p 2 -q 50 qft 5 1 &
+a=$!
+python benchmark.py -p 2 -q 50 qft 16 1 &
+b=$!
+wait $a
+wait $b
+
+python benchmark.py -p 2 -q 50 aqft 5 1 &
+a=$!
+python benchmark.py -p 2 -q 50 aqft 16 1 &
+b=$!
+wait $a
+wait $b
+
+python benchmark.py -p 2 -q 50 add 4 1 &
+a=$!
+python benchmark.py -p 2 -q 50 add 6 1 &
+b=$!
+wait $a
+wait $b
 ```

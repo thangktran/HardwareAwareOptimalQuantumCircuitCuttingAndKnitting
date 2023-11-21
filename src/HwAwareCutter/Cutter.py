@@ -106,7 +106,8 @@ class Cutter:
         markedQvmDag = DAG(markedCirc)
 
         self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
-        markedQvmDag.fragment()
+        fragments = self._getFragments(V)
+        markedQvmDag.fragment(fragments)
 
         return copiedDecomposedCirc, markedCirc, markedQvmDag.to_circuit()
 
@@ -406,3 +407,17 @@ class Cutter:
                     instr.qubits.append(move_reg[cut_ctr])
                     qubit_mapping[instr.qubits[0]] = instr.qubits[1]
                     cut_ctr += 1
+
+
+
+    def _getFragments(self, V) -> List[Set[Qubit]]:
+        results = defaultdict(set)
+        for o_vpVar in self.o_vp:
+            if is_false(self.model[o_vpVar]):
+                continue
+            pIdx = o_vpVar.pIdx
+            vIdx = o_vpVar.vIdx
+            results[pIdx].add(V[vIdx].qubit)
+        resultList = list(results.values())
+        # TODO: check if each set doesn't contain each other elements
+        return resultList
