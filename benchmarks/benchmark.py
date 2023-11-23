@@ -166,6 +166,10 @@ for idx, Q_pi in enumerate(Q_pArr):
 
 cutter.logOptimizerResults()
 
+Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
+Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
+Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
+
 nShots = 10000
 backend = FakeKolkataV2()
 
@@ -176,7 +180,3 @@ inputCircFidelity, cutCircFidelity, cutVsUncutFidelity = Utilities.compareOrigin
 logger.info(f"inputCircFidelity: {inputCircFidelity}")
 logger.info(f"cutCircFidelity: {cutCircFidelity}")
 logger.info(f"cutVsUncutFidelity: {cutVsUncutFidelity}")
-
-Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
-Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
-Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
