@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from typing import *
+import heapq
 
 from z3 import *
 import networkx as nx
@@ -14,7 +15,7 @@ from qiskit.dagcircuit import DAGOpNode
 from qiskit.dagcircuit.dagcircuit import DAGCircuit
 
 from qvm.compiler.dag import DAG
-from qvm.virtual_gates import VirtualMove, WireCut, VIRTUAL_GATE_TYPES
+from qvm.virtual_gates import VirtualMove, WireCut, VirtualBinaryGate, VIRTUAL_GATE_TYPES
 
 from HwAwareCutter.Logger import Logger
 
@@ -34,19 +35,26 @@ class EdgeType(Enum):
 
 
 class Cutter:
-    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int = 10, forceNWireCut : int | None = None, forceNGateCut : int | None = None) -> None:
+    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNCuts : int | None = None) -> None:
         self.logger = Logger().getLogger(__name__)
         self.inputCirc = inputCirc
         self.maxNPartitions = maxNPartitions
         self.maxNQubitsPerPartition = maxNQubitsPerPartition
-        self.forceNWireCut = None
-        if forceNWireCut is not None:
-            assert(forceNWireCut>0)
-            self.forceNWireCut = forceNWireCut
-        self.forceNGateCut = None
-        if forceNGateCut is not None:
-            assert(forceNGateCut>0)
-            self.forceNGateCut = forceNGateCut
+        self.forceNWireCuts = None
+        if forceNWireCuts is not None:
+            assert(forceNWireCuts>0)
+            self.forceNWireCuts = forceNWireCuts
+        self.forceNGateCuts = None
+        if forceNGateCuts is not None:
+            assert(forceNGateCuts>0)
+            self.forceNGateCuts = forceNGateCuts
+        self.maxNCuts = None
+        if maxNCuts is not None:
+            nWireCuts = 0 if forceNWireCuts is None else forceNWireCuts
+            nGateCuts = 0 if forceNGateCuts is None else forceNGateCuts
+            assert(maxNCuts>0)
+            assert(maxNCuts >= nWireCuts+nGateCuts)
+            self.maxNCuts = maxNCuts
         self.decomposedCirc = inputCirc.decompose()
         self.V, self.W, self.G, self.I = self._readCirc(self.decomposedCirc)
 
@@ -105,9 +113,12 @@ class Cutter:
         markedCirc = dag_to_circuit(markedDag)
         markedQvmDag = DAG(markedCirc)
 
-        self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
-        fragments = self._getFragments(V)
-        markedQvmDag.fragment(fragments)
+        moveQubits = self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
+        # FIXME: how to fragment according to Z3 and account for MoveQubits also.
+        # fragments = self._getFragments(V)
+        # fragments = self._mergeFragmentsWithMoveQubits(fragments, moveQubits)
+        # markedQvmDag.fragment(fragments)
+        markedQvmDag.fragment()
 
         return copiedDecomposedCirc, markedCirc, markedQvmDag.to_circuit()
 
@@ -341,14 +352,21 @@ class Cutter:
         for pIdx in range(self.maxNPartitions):
             self.s.add(self.Q >= self.Q_p[pIdx])
         
+        sumWireCuts = None
+        sumGateCuts = None
         # helper constraints : force N wire cuts.
-        if self.forceNWireCut is not None:
+        if self.forceNWireCuts is not None or self.maxNCuts is not None:
             sumWireCuts = [If(And(self.c_e[idx], self.c_e[idx].edgeType == EdgeType.WireCut), 1, 0) for idx in range(len(self.c_e))]
-            self.s.add(Sum(sumWireCuts) == self.forceNWireCut)
         # helper constraints : force N gate cuts.
-        if self.forceNGateCut is not None:
+        if self.forceNGateCuts is not None or self.maxNCuts is not None:
             sumGateCuts = [If(And(self.c_e[idx], self.c_e[idx].edgeType == EdgeType.GateCut), 1, 0) for idx in range(len(self.c_e))]
-            self.s.add(Sum(sumGateCuts) == self.forceNGateCut)
+        
+        if self.forceNWireCuts is not None:
+            self.s.add(Sum(sumWireCuts) == self.forceNWireCuts)
+        if self.forceNGateCuts is not None:
+            self.s.add(Sum(sumGateCuts) == self.forceNGateCuts)
+        if self.maxNCuts is not None:
+            self.s.add(Sum(sumWireCuts)+Sum(sumGateCuts) <= self.maxNCuts)
 
         # objectives
         self.s.minimize(self.Q)
@@ -387,9 +405,9 @@ class Cutter:
         return dag
 
 
-    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG) -> None:
+    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG) -> List[Qubit]:
             if self.nWireCuts == 0:
-                return
+                return []
 
             move_reg = QuantumRegister(self.nWireCuts, "vmove")
             dag.add_qreg(move_reg)
@@ -408,16 +426,61 @@ class Cutter:
                     qubit_mapping[instr.qubits[0]] = instr.qubits[1]
                     cut_ctr += 1
 
-
+            return [move_reg[idx] for idx in range(self.nWireCuts)]
 
     def _getFragments(self, V) -> List[Set[Qubit]]:
         results = defaultdict(set)
+        visited = set()
         for o_vpVar in self.o_vp:
             if is_false(self.model[o_vpVar]):
                 continue
             pIdx = o_vpVar.pIdx
             vIdx = o_vpVar.vIdx
-            results[pIdx].add(V[vIdx].qubit)
+            v = V[vIdx]
+            q = v.qubit
+            if q in visited:
+                continue
+            
+            visited.add(q)
+            results[pIdx].add(q)
+            
+            if not isinstance(v.opNode.op, VirtualBinaryGate):
+                q1Set = set(v.opNode.qargs) - set([q])
+                assert(len(q1Set) == 1)
+                q1 = q1Set.pop()
+                visited.add(q1)
+                results[pIdx].add(q1)
+
+
         resultList = list(results.values())
-        # TODO: check if each set doesn't contain each other elements
         return resultList
+    
+    def _mergeFragmentsWithMoveQubits(self, fragments, moveQubits):
+            if len(moveQubits) == 0:
+                return fragments
+            
+            availableFragmentsIdx = []
+
+            def checkAndAddElemToHeap(idx, f):
+                nElems = len(f)
+                if nElems >= self.maxNQubitsPerPartition:
+                    return
+                # min heap => least n elem first
+                heapq.heappush(availableFragmentsIdx,  (nElems, idx) )
+
+            for idx, f in enumerate(fragments):
+                checkAndAddElemToHeap(idx, f)
+            
+            # evenly distribute moveQubits to fragments
+            while len(moveQubits) != 0 and len(availableFragmentsIdx) != 0:
+                q = moveQubits.pop()
+                _, fIdx = heapq.heappop(availableFragmentsIdx)
+                f = fragments[fIdx]
+                f.add(q)
+                checkAndAddElemToHeap(fIdx, f) # maybe this fragment still has available spots.
+
+            if len(availableFragmentsIdx) == 0:
+                assert(len(moveQubits) <= self.maxNQubitsPerPartition)
+                fragments.append(set(moveQubits))
+                
+            return fragments

@@ -139,7 +139,7 @@ else:
     raise RuntimeError("CIRC_NAME {CIRC_NAME} is not supported")
 
 
-cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCut=None, forceNGateCut=None)
+cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCuts=None, forceNGateCuts=None, maxNCuts=5)
 
 startTime = datetime.datetime.now()
 logger.info(f"solving STARTED")
