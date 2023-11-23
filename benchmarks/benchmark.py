@@ -170,7 +170,7 @@ Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
 Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
 Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
 
-nShots = 10000
+nShots = 1000
 backend = FakeKolkataV2()
 
 logger.info(f"Circuits will be run with {nShots} shots to calculate fidelity...")
