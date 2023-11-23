@@ -39,10 +39,11 @@ def saveCircuit(circ : QuantumCircuit, dir : str, name : str) -> None:
 def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
     
     def workerTask(circuit : QuantumCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
-        Logger().getLogger(__name__).debug(f"getCircResultFromBackend {backend}")
+        Logger().getLogger(__name__).debug(f"getCircResultFromBackend {backend} => STARTED")
         resultsMap[backend] = QuasiDistr.from_counts(
             backend.run(circuit, shots=nShots).result().get_counts()
         )
+        Logger().getLogger(__name__).debug(f"getCircResultFromBackend {backend} => ENDED")
 
     results = {}
     simulatorBackend = AerSimulator()
@@ -73,9 +74,10 @@ def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots
 def getVirtualCircResultFromBackend(cutCircuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
     
     def workerTask(virtualCirc : VirtualCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
-        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend}")
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend} STARTED")
         virtualCirc.set_backend_for_all(backend)
         resultsMap[backend], _ = run_virtual_circuit(virtualCirc, shots=nShots)
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend} DONE")
 
     results = {}
     simulatorBackend = AerSimulator()
@@ -106,14 +108,16 @@ def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : Quan
     results = {}
 
     def originalCircTask(originalCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
-        Logger().getLogger(__name__).debug("originalCircTask")
+        Logger().getLogger(__name__).debug("originalCircTask STARTED")
         idealResult, noisyResult = getCircResultFromBackend(originalCirc, backend, nShots)
         results[originalCirc.name] = (idealResult, noisyResult)
+        Logger().getLogger(__name__).debug("originalCircTask ENDED")
 
     def cutCircTask(cutCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
-        Logger().getLogger(__name__).debug("cutCircTask")
+        Logger().getLogger(__name__).debug("cutCircTask STARTED")
         idealResult, noisyResult = getVirtualCircResultFromBackend(cutCirc, backend, nShots)
         results[cutCirc.name] = (idealResult, noisyResult)
+        Logger().getLogger(__name__).debug("cutCircTask ENDED")
 
     originalCircThread = threading.Thread(target=originalCircTask, args=[originalCirc, backend, nShots, results])
     cutCircThread = threading.Thread(target=cutCircTask, args=[cutCirc, backend, nShots, results])
