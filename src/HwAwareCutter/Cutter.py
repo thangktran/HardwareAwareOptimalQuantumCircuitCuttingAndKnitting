@@ -113,12 +113,9 @@ class Cutter:
         markedCirc = dag_to_circuit(markedDag)
         markedQvmDag = DAG(markedCirc)
 
-        moveQubits = self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
-        # FIXME: how to fragment according to Z3 and account for MoveQubits also.
-        # fragments = self._getFragments(V)
-        # fragments = self._mergeFragmentsWithMoveQubits(fragments, moveQubits)
-        # markedQvmDag.fragment(fragments)
-        markedQvmDag.fragment()
+        qubitMappings = self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
+        fragments = self._getFragments(V, qubitMappings)
+        markedQvmDag.fragment(fragments)
 
         return copiedDecomposedCirc, markedCirc, markedQvmDag.to_circuit()
 
@@ -405,32 +402,46 @@ class Cutter:
         return dag
 
 
-    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG) -> List[Qubit]:
-            if self.nWireCuts == 0:
-                return []
+    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG) -> dict[Qubit, Qubit]:
+        if self.nWireCuts == 0:
+            return {}
+        
+        qubitMappingToReturn = {}
 
-            move_reg = QuantumRegister(self.nWireCuts, "vmove")
-            dag.add_qreg(move_reg)
-            qubit_mapping: dict[Qubit, Qubit] = {}
-            cut_ctr = 0
-            def _find_qubit(qubit: Qubit) -> Qubit:
-                while qubit in qubit_mapping:
-                    qubit = qubit_mapping[qubit]
-                return qubit
-            for node in nx.topological_sort(dag):
-                instr = dag.get_node_instr(node)
-                instr.qubits = [_find_qubit(qubit) for qubit in instr.qubits]
-                if isinstance(instr.operation, WireCut):
-                    instr.operation = VirtualMove(SwapGate(label=instr.operation.wireCutLabel))
-                    instr.qubits.append(move_reg[cut_ctr])
-                    qubit_mapping[instr.qubits[0]] = instr.qubits[1]
-                    cut_ctr += 1
+        move_reg = QuantumRegister(self.nWireCuts, "vmove")
+        moveQubitSet = set(move_reg)
+        dag.add_qreg(move_reg)
+        qubit_mapping: dict[Qubit, Qubit] = {}
+        cut_ctr = 0
+        def _find_qubit(qubit: Qubit) -> Qubit:
+            while qubit in qubit_mapping:
+                qubit = qubit_mapping[qubit]
+            return qubit
+        for node in nx.topological_sort(dag):
+            instr = dag.get_node_instr(node)
+            instr.qubits = [_find_qubit(qubit) for qubit in instr.qubits]
+            qubitSet = set(instr.qubits)
+            intersectSet = moveQubitSet & qubitSet
+            
+            if len(qubitSet) == 2 and len(intersectSet) != 0:
+                assert(len(intersectSet)==1)
+                otherQubitSet = qubitSet - intersectSet
+                assert(len(otherQubitSet)==1)
+                qubitMappingToReturn[otherQubitSet.pop()] = intersectSet.pop()
 
-            return [move_reg[idx] for idx in range(self.nWireCuts)]
+            if isinstance(instr.operation, WireCut):
+                instr.operation = VirtualMove(SwapGate(label=instr.operation.wireCutLabel))
+                instr.qubits.append(move_reg[cut_ctr])
+                qubit_mapping[instr.qubits[0]] = instr.qubits[1]
+                cut_ctr += 1
+        
+        return qubitMappingToReturn
+    
 
-    def _getFragments(self, V) -> List[Set[Qubit]]:
-        results = defaultdict(set)
+    def _getFragments(self, V : List[DagVertex], qubitMapping : dict[Qubit, Qubit]) -> List[Set[Qubit]]:
+        results = [set() for _ in range(self.maxNPartitions)]
         visited = set()
+
         for o_vpVar in self.o_vp:
             if is_false(self.model[o_vpVar]):
                 continue
@@ -438,22 +449,19 @@ class Cutter:
             vIdx = o_vpVar.vIdx
             v = V[vIdx]
             q = v.qubit
+
             if q in visited:
                 continue
-            
+
             visited.add(q)
             results[pIdx].add(q)
-            
-            if not isinstance(v.opNode.op, VirtualBinaryGate):
-                q1Set = set(v.opNode.qargs) - set([q])
-                assert(len(q1Set) == 1)
-                q1 = q1Set.pop()
+
+            if q in qubitMapping:
+                q1 = qubitMapping[q]
                 visited.add(q1)
                 results[pIdx].add(q1)
 
-
-        resultList = list(results.values())
-        return resultList
+        return results
     
     def _mergeFragmentsWithMoveQubits(self, fragments, moveQubits):
             if len(moveQubits) == 0:

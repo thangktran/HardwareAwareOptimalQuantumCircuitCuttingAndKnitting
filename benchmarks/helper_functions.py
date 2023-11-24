@@ -1,11 +1,17 @@
 # credit: helper_functions/benchmarks.py from cutqc
 
 import qiskit.circuit.library as library
+from qiskit.circuit.random import random_circuit
+from qiskit.circuit.library import EfficientSU2
+from qiskit import QuantumCircuit
+
 import math, qiskit, random
 import networkx as nx
 import numpy as np
 
 from qcg.generators import gen_supremacy, gen_hwea, gen_BV, gen_sycamore, gen_adder
+
+from HwAwareCutter.Logger import Logger
 
 def factor_int(n):
     nsqrt = math.ceil(math.sqrt(n))
@@ -119,3 +125,110 @@ def generate_circ(num_qubits, depth, circuit_type, reg_name="q", connected_only=
             num_trials -= 1
     assert full_circ is None or full_circ.num_qubits == num_qubits
     return full_circ
+
+
+#################################################
+
+def generateRandomCircuit(nQubits : int, depth : int):
+    inputCirc = random_circuit(nQubits, depth) # (5,4) most of the time result in a wire cut
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"random circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateSupremacy(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "supremacy")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"supremacy circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateEfficientSu2(nQubits : int, depth : int):
+    entanglement = "linear"
+    inputCirc = EfficientSU2(nQubits, entanglement=entanglement, reps=2)
+    inputCirc = inputCirc.bind_parameters(
+        {param: np.random.randn() / 2 for param in inputCirc.parameters}
+    )
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"EfficientSU2 circuit with {nQubits} qubits & {entanglement} entanglement is generated")
+    return inputCirc
+
+def generateGhz(nQubits : int, depth : int):
+    inputCirc = QuantumCircuit(nQubits, nQubits)
+    inputCirc.h(0)
+    for i in range(1, nQubits):
+        inputCirc.cx(i - 1, i)
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"linear GHZ state circuit with {nQubits} qubits is generated")
+    return inputCirc
+
+def generateSycamore(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "sycamore")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"sycamore circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateHwea(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "hwea")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"HWEA circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateBv(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "bv")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"BV circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateQft(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "qft")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"QFT circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateAqft(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "aqft")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"AQFT circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateAdder(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "adder")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"Adder circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+def generateErdos(nQubits : int, depth : int):
+    inputCirc = generate_circ(nQubits, depth, "erdos")
+    inputCirc.measure_all()
+    Logger().getLogger(__name__).info(f"QAOA Erdos circuit with {nQubits} qubits & depth of {depth} is generated")
+    return inputCirc
+
+
+def genCirc(circName : str, nQubits : int, depth : int):
+    inputCirc = None
+
+    if circName == "ran":
+        inputCirc = generateRandomCircuit(nQubits, depth)
+    elif circName == "sup":
+        inputCirc = generateSupremacy(nQubits, depth)
+    elif circName == "su":
+        inputCirc = generateEfficientSu2(nQubits, depth)
+    elif circName == "ghz":
+        inputCirc = generateGhz(nQubits, depth)
+    elif circName == "syc":
+        inputCirc = generateSycamore(nQubits, depth)
+    elif circName == "hwe":
+        inputCirc = generateHwea(nQubits, depth)
+    elif circName == "bv":
+        inputCirc = generateBv(nQubits, depth)
+    elif circName == "qft":
+        inputCirc = generateQft(nQubits, depth)
+    elif circName == "aqft":
+        inputCirc = generateAqft(nQubits, depth)
+    elif circName == "add":
+        inputCirc = generateAdder(nQubits, depth)
+    elif circName == "erd":
+        inputCirc = generateErdos(nQubits, depth)
+    else:
+        raise RuntimeError(f"circName {circName} is not supported")
+    
+    return inputCirc
