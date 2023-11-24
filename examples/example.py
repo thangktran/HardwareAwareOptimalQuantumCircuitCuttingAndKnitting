@@ -27,7 +27,7 @@ while cutter.solve():
 
     logger.info(f"success => True")
         
-    decomposedCirc, markedCirc, cutCirc = cutter.getCutCirc()
+    decomposedCirc, markedCirc, cutCirc, instantiations = cutter.getResultCircs()
     S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
 
     logger.info(f"S: {S}")

@@ -28,7 +28,8 @@ if len(sys.argv) == 8 and sys.argv[1] == "-p" and sys.argv[3] == "-q":
     CIRC_DEPTH = int(sys.argv[7])
 
 BENCHMARK_DIR = f"./benchmark_results/{CIRC_NAME}_{CIRC_N_QUBITS}_{CIRC_DEPTH}_{BENCHMARK_MAX_PARTITIONS}_{BENCHMARK_MAX_N_QUBITS}_{datetime.datetime.now()}"
-pathlib.Path(BENCHMARK_DIR).mkdir(parents=True, exist_ok=True)
+INSTANTIANTIONS_DIR = f"{BENCHMARK_DIR}/instantiations"
+pathlib.Path(INSTANTIANTIONS_DIR).mkdir(parents=True, exist_ok=True)
 LOG_FILE = pathlib.Path(BENCHMARK_DIR) / "run.log"
 
 Logger().configureLoggers(LOG_FILE)
@@ -51,7 +52,7 @@ logger.info(f"success => {success}")
 if not success:
     sys.exit(0)
 
-decomposedCirc, markedCirc, cutCirc = cutter.getCutCirc()
+decomposedCirc, markedCirc, cutCirc, instantiations = cutter.getResultCircs()
 S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
 
 logger.info(f"S: {S}")
@@ -66,6 +67,16 @@ cutter.logOptimizerResults()
 Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
 Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
 Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
+
+logger.info(f"all instantiations will be saved to disk ...")
+
+instantiationCount = 0
+for fIdx, inst in enumerate(instantiations):
+    for cIdx, c in enumerate(inst):
+        Utilities.saveCircuit(c, INSTANTIANTIONS_DIR, f"{fIdx}_{cIdx}")
+        instantiationCount+=1
+
+logger.info(f"{instantiationCount} instantiations are saved to disk")
 
 nShots = 1000
 backend = FakeKolkataV2()

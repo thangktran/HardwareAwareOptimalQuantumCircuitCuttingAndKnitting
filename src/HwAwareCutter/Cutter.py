@@ -15,7 +15,8 @@ from qiskit.dagcircuit import DAGOpNode
 from qiskit.dagcircuit.dagcircuit import DAGCircuit
 
 from qvm.compiler.dag import DAG
-from qvm.virtual_gates import VirtualMove, WireCut, VirtualBinaryGate, VIRTUAL_GATE_TYPES
+from qvm.virtual_gates import VirtualMove, WireCut, VIRTUAL_GATE_TYPES
+from qvm.virtual_circuit import VirtualCircuit, generate_instantiations
 
 from HwAwareCutter.Logger import Logger
 
@@ -98,8 +99,8 @@ class Cutter:
         return True
 
 
-    # return decomposed-circuit, cut-marked-circuit, and cut-circuit
-    def getCutCirc(self) -> Tuple[QuantumCircuit, QuantumCircuit, QuantumCircuit]:
+    # return decomposed-circuit, cut-marked-circuit, cut-circuit, instantiated-circuits
+    def getResultCircs(self) -> Tuple[QuantumCircuit, QuantumCircuit, QuantumCircuit, List[List[QuantumCircuit]]]:
         if self.model is None:
             raise RuntimeError("no model exists")
 
@@ -116,8 +117,9 @@ class Cutter:
         qubitMappings = self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
         fragments = self._getFragments(V, qubitMappings)
         markedQvmDag.fragment(fragments)
+        cutCirc = markedQvmDag.to_circuit()
 
-        return copiedDecomposedCirc, markedCirc, markedQvmDag.to_circuit()
+        return copiedDecomposedCirc, markedCirc, cutCirc, self._generateInstantiation(VirtualCircuit(cutCirc.copy()))
 
     
     # return S, nWireCuts, nGateCuts, Q, [Q_p1, Q_p2, ..., Q_pn]
@@ -492,3 +494,12 @@ class Cutter:
                 fragments.append(set(moveQubits))
                 
             return fragments
+    
+    def _generateInstantiation(self, virt: VirtualCircuit) -> List[List[QuantumCircuit]]:
+        instantiations = []
+
+        for frag, frag_circuit in virt.fragment_circuits.items():
+            instance_labels = virt.get_instance_labels(frag)
+            instantiations.append(generate_instantiations(frag_circuit, instance_labels))
+        
+        return instantiations
