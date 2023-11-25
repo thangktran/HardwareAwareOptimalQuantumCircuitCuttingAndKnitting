@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from typing import *
-import heapq
+import math
 
 from z3 import *
 import networkx as nx
@@ -41,14 +41,19 @@ class Cutter:
         self.inputCirc = inputCirc
         self.maxNPartitions = maxNPartitions
         self.maxNQubitsPerPartition = maxNQubitsPerPartition
+        
+        assert(math.ceil(len(inputCirc.qubits)/maxNPartitions) <= maxNQubitsPerPartition)
+
         self.forceNWireCuts = None
         if forceNWireCuts is not None:
             assert(forceNWireCuts>0)
             self.forceNWireCuts = forceNWireCuts
+        
         self.forceNGateCuts = None
         if forceNGateCuts is not None:
             assert(forceNGateCuts>0)
             self.forceNGateCuts = forceNGateCuts
+        
         self.maxNCuts = None
         if maxNCuts is not None:
             nWireCuts = 0 if forceNWireCuts is None else forceNWireCuts
@@ -56,6 +61,7 @@ class Cutter:
             assert(maxNCuts>0)
             assert(maxNCuts >= nWireCuts+nGateCuts)
             self.maxNCuts = maxNCuts
+        
         self.decomposedCirc = inputCirc.decompose()
         self.V, self.W, self.G, self.I = self._readCirc(self.decomposedCirc)
 
@@ -464,36 +470,6 @@ class Cutter:
                 results[pIdx].add(q1)
 
         return results
-    
-    def _mergeFragmentsWithMoveQubits(self, fragments, moveQubits):
-            if len(moveQubits) == 0:
-                return fragments
-            
-            availableFragmentsIdx = []
-
-            def checkAndAddElemToHeap(idx, f):
-                nElems = len(f)
-                if nElems >= self.maxNQubitsPerPartition:
-                    return
-                # min heap => least n elem first
-                heapq.heappush(availableFragmentsIdx,  (nElems, idx) )
-
-            for idx, f in enumerate(fragments):
-                checkAndAddElemToHeap(idx, f)
-            
-            # evenly distribute moveQubits to fragments
-            while len(moveQubits) != 0 and len(availableFragmentsIdx) != 0:
-                q = moveQubits.pop()
-                _, fIdx = heapq.heappop(availableFragmentsIdx)
-                f = fragments[fIdx]
-                f.add(q)
-                checkAndAddElemToHeap(fIdx, f) # maybe this fragment still has available spots.
-
-            if len(availableFragmentsIdx) == 0:
-                assert(len(moveQubits) <= self.maxNQubitsPerPartition)
-                fragments.append(set(moveQubits))
-                
-            return fragments
     
     def _generateInstantiation(self, virt: VirtualCircuit) -> List[List[QuantumCircuit]]:
         instantiations = []
