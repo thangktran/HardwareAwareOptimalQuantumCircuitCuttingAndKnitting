@@ -120,8 +120,9 @@ class Cutter:
         markedCirc = dag_to_circuit(markedDag)
         markedQvmDag = DAG(markedCirc)
 
-        qubitMappings = self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
-        fragments = self._getFragments(V, qubitMappings)
+        self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
+        V, _, _, _ = self._readCirc(markedQvmDag.to_circuit())
+        fragments = self._getFragments(V)
         markedQvmDag.fragment(fragments)
         cutCirc = markedQvmDag.to_circuit()
 
@@ -174,7 +175,7 @@ class Cutter:
 
         for v in dag.topological_op_nodes():
             # skip barriers and non-2qubit-gates
-            if len(v.qargs) != 2 or v.op.name == "barrier":
+            if len(v.qargs) != 2 or v.op.name == "barrier" or isinstance(v.op, VirtualMove):
                 continue
             qubit0 = v.qargs[0]
             qubit1 = v.qargs[1]
@@ -410,14 +411,11 @@ class Cutter:
         return dag
 
 
-    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG) -> dict[Qubit, Qubit]:
+    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG):
         if self.nWireCuts == 0:
-            return {}
-        
-        qubitMappingToReturn = {}
+            return 
 
         move_reg = QuantumRegister(self.nWireCuts, "vmove")
-        moveQubitSet = set(move_reg)
         dag.add_qreg(move_reg)
         qubit_mapping: dict[Qubit, Qubit] = {}
         cut_ctr = 0
@@ -428,25 +426,15 @@ class Cutter:
         for node in nx.topological_sort(dag):
             instr = dag.get_node_instr(node)
             instr.qubits = [_find_qubit(qubit) for qubit in instr.qubits]
-            qubitSet = set(instr.qubits)
-            intersectSet = moveQubitSet & qubitSet
-            
-            if len(qubitSet) == 2 and len(intersectSet) != 0:
-                assert(len(intersectSet)==1)
-                otherQubitSet = qubitSet - intersectSet
-                assert(len(otherQubitSet)==1)
-                qubitMappingToReturn[otherQubitSet.pop()] = intersectSet.pop()
 
             if isinstance(instr.operation, WireCut):
                 instr.operation = VirtualMove(SwapGate(label=instr.operation.wireCutLabel))
                 instr.qubits.append(move_reg[cut_ctr])
                 qubit_mapping[instr.qubits[0]] = instr.qubits[1]
                 cut_ctr += 1
-        
-        return qubitMappingToReturn
     
 
-    def _getFragments(self, V : List[DagVertex], qubitMapping : dict[Qubit, Qubit]) -> List[Set[Qubit]]:
+    def _getFragments(self, V : List[DagVertex]) -> List[Set[Qubit]]:
         results = [set() for _ in range(self.maxNPartitions)]
         visited = set()
 
@@ -463,11 +451,6 @@ class Cutter:
 
             visited.add(q)
             results[pIdx].add(q)
-
-            if q in qubitMapping:
-                q1 = qubitMapping[q]
-                visited.add(q1)
-                results[pIdx].add(q1)
 
         return results
     
