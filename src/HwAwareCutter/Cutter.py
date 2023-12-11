@@ -36,13 +36,20 @@ class EdgeType(Enum):
 
 
 class Cutter:
-    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNCuts : int | None = None) -> None:
+    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int | List[int] = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNCuts : int | None = None) -> None:
         self.logger = Logger().getLogger(__name__)
-        self.inputCirc = inputCirc
+        self.inputCirc = inputCirc.copy()
         self.maxNPartitions = maxNPartitions
-        self.maxNQubitsPerPartition = maxNQubitsPerPartition
-        
-        assert(math.ceil(len(inputCirc.qubits)/maxNPartitions) <= maxNQubitsPerPartition)
+
+        if type(maxNQubitsPerPartition) == int:
+            self.maxNQubitsPerPartition = [maxNQubitsPerPartition for _ in range(maxNPartitions)]
+        elif type(maxNQubitsPerPartition) == list:
+            self.maxNQubitsPerPartition = maxNQubitsPerPartition
+        else:
+            raise RuntimeError("Invalid type")
+
+        assert(len(self.maxNQubitsPerPartition) == self.maxNPartitions)
+        assert(len(inputCirc.qubits) <= sum(self.maxNQubitsPerPartition))
 
         self.forceNWireCuts = None
         if forceNWireCuts is not None:
@@ -353,10 +360,10 @@ class Cutter:
             productTerm *= If(And(self.c_e[idx], self.c_e[idx].edgeType == EdgeType.GateCut), GATE_CUT_COST, 1) * If(And(self.c_e[idx], self.c_e[idx].edgeType == EdgeType.WireCut), WIRE_CUT_COST, 1)
         self.s.add(self.S == productTerm)
         self.s.add(self.S > 1)
-        self.s.add(self.Q <= self.maxNQubitsPerPartition) # number of qubit <= maximum number of qubit allowed
 
         for pIdx in range(self.maxNPartitions):
             self.s.add(self.Q >= self.Q_p[pIdx])
+            self.s.add(self.Q_p[pIdx] <= self.maxNQubitsPerPartition[pIdx])
         
         sumWireCuts = None
         sumGateCuts = None
