@@ -103,6 +103,53 @@ def getVirtualCircResultFromBackend(cutCircuit: QuantumCircuit, backend: Backend
     return results[simulatorBackend], results[backend]
 
 
+def getVirtualCircResultFromBackends(cutCircuit: QuantumCircuit, backends: List[BackendV2], nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
+    
+    INPUT_KEY = "input"
+    CUT_CIRC_KEY = "cut"
+
+    def workerTask1(virtualCirc : VirtualCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend} STARTED")
+        virtualCirc.set_backend_for_all(backend)
+        resultsMap[INPUT_KEY], _ = run_virtual_circuit(virtualCirc, shots=nShots)
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend} DONE")
+
+    def workerTask2(virtualCirc : VirtualCircuit, backends : List[BackendV2], nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backends} STARTED")
+        
+        frags = virtualCirc.fragment_circuits
+
+        for idx, fKey in enumerate(frags.keys()):
+            assert(frags[fKey].num_qubits <= backends[idx].configuration().n_qubits)
+            virtualCirc.set_backend(fKey, backends[idx])
+
+        resultsMap[CUT_CIRC_KEY], _ = run_virtual_circuit(virtualCirc, shots=nShots)
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backends} DONE")
+
+    results = {}
+    simulatorBackend = AerSimulator()
+
+    idealSimulatorThread = threading.Thread(target=workerTask1, args=[VirtualCircuit(cutCircuit.copy()), simulatorBackend, nShots, results])
+    noisyBackendThread = threading.Thread(target=workerTask2, args=[VirtualCircuit(cutCircuit.copy()), backends, nShots, results])
+
+    idealSimulatorThread.start()
+    noisyBackendThread.start()
+
+    try:
+        while idealSimulatorThread.is_alive() or noisyBackendThread.is_alive():
+            if idealSimulatorThread.is_alive():
+                idealSimulatorThread.join(0.5)
+            if noisyBackendThread.is_alive():
+                noisyBackendThread.join(0.5)
+    except (KeyboardInterrupt, SystemExit):
+        sys.exit(0)
+
+    idealSimulatorThread.join()
+    noisyBackendThread.join()
+
+    return results[INPUT_KEY], results[CUT_CIRC_KEY]
+
+
 # return originalCircFidelity, cutCircFidelity, cutVsUncutFidelity
 def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[float, float, float]:
     results = {}
@@ -121,6 +168,77 @@ def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : Quan
 
     originalCircThread = threading.Thread(target=originalCircTask, args=[originalCirc, backend, nShots, results])
     cutCircThread = threading.Thread(target=cutCircTask, args=[cutCirc, backend, nShots, results])
+
+    originalCircThread.start()
+    cutCircThread.start()
+
+    try:
+        while originalCircThread.is_alive() or cutCircThread.is_alive():
+            if originalCircThread.is_alive():
+                originalCircThread.join(0.5)
+            if cutCircThread.is_alive():
+                cutCircThread.join(0.5)
+    except (KeyboardInterrupt, SystemExit):
+        sys.exit(0)
+
+    originalCircThread.join()
+    cutCircThread.join()
+
+    inputCircIdealResult, inputCircNoisyResult = results[originalCirc.name]
+    cutCircIdealResult, cutCircNoisyResult = results[cutCirc.name]
+
+    Logger().getLogger(__name__).debug("inputCircIdealResult: ")
+    Logger().getLogger(__name__).debug(dict(sorted(inputCircIdealResult.items())))
+    Logger().getLogger(__name__).debug("cutCircIdealResult: ")
+    Logger().getLogger(__name__).debug(dict(sorted(cutCircIdealResult.items())))
+
+    inputCircIdealResultKeysSet = set(inputCircIdealResult.keys())
+    cutCircIdealResultKeysSet = set(cutCircIdealResult.keys())
+
+    sameKeys = inputCircIdealResultKeysSet.intersection(cutCircIdealResultKeysSet)
+    sameKeysCompare = {}
+    for key in sameKeys:
+        sameKeysCompare[key] = (inputCircIdealResult[key], cutCircIdealResult[key])
+    
+    Logger().getLogger(__name__).debug("sameKeysCompare: ")
+    Logger().getLogger(__name__).debug(dict(sorted(sameKeysCompare.items())))
+    
+    onlyInInputCircuitKeys = inputCircIdealResultKeysSet.difference(cutCircIdealResultKeysSet)
+    onlyInCutCircuitKeys = cutCircIdealResultKeysSet.difference(inputCircIdealResultKeysSet)
+
+    onlyInInputCircuit = {k : inputCircIdealResult[k] for k in onlyInInputCircuitKeys}
+    onlyInCutCircuit = {k : cutCircIdealResult[k] for k in onlyInCutCircuitKeys}
+
+    Logger().getLogger(__name__).debug("onlyInInputCircuit: ")
+    Logger().getLogger(__name__).debug(dict(sorted(onlyInInputCircuit.items())))
+    Logger().getLogger(__name__).debug("onlyInCutCircuit: ")
+    Logger().getLogger(__name__).debug(dict(sorted(onlyInCutCircuit.items())))
+
+    inputCircFidelity = hellinger_fidelity(inputCircIdealResult, inputCircNoisyResult)
+    cutCircFidelity = hellinger_fidelity(cutCircIdealResult, cutCircNoisyResult)
+    cutVsUncutFidelity = hellinger_fidelity(inputCircIdealResult, cutCircIdealResult)
+
+    return inputCircFidelity, cutCircFidelity, cutVsUncutFidelity
+
+
+# return originalCircFidelity, cutCircFidelity, cutVsUncutFidelity
+def compareOriginalCircWithCutCircMultipleBackends(originalCirc : QuantumCircuit, cutCirc : QuantumCircuit, backendForInputCirc: BackendV2, fragmentBackends : List[BackendV2], nShots : int) -> Tuple[float, float, float]:
+    results = {}
+
+    def originalCircTask(originalCirc : QuantumCircuit, backendForInputCirc : BackendV2, nShots : int, results : List) -> None:
+        Logger().getLogger(__name__).debug("originalCircTask STARTED")
+        idealResult, noisyResult = getCircResultFromBackend(originalCirc, backendForInputCirc, nShots)
+        results[originalCirc.name] = (idealResult, noisyResult)
+        Logger().getLogger(__name__).debug("originalCircTask ENDED")
+
+    def cutCircTask(cutCirc : QuantumCircuit, fragmentBackends : List[BackendV2], nShots : int, results : List) -> None:
+        Logger().getLogger(__name__).debug("cutCircTask STARTED")
+        idealResult, noisyResult = getVirtualCircResultFromBackends(cutCirc, fragmentBackends, nShots)
+        results[cutCirc.name] = (idealResult, noisyResult)
+        Logger().getLogger(__name__).debug("cutCircTask ENDED")
+
+    originalCircThread = threading.Thread(target=originalCircTask, args=[originalCirc, backendForInputCirc, nShots, results])
+    cutCircThread = threading.Thread(target=cutCircTask, args=[cutCirc, fragmentBackends, nShots, results])
 
     originalCircThread.start()
     cutCircThread.start()
