@@ -37,7 +37,7 @@ logger = Logger().getLogger()
 
 inputCirc = genCirc(CIRC_NAME, CIRC_N_QUBITS, CIRC_DEPTH)
 
-cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCuts=None, forceNGateCuts=None, maxNCuts=5)
+cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCuts=None, forceNGateCuts=None, forceWireTeleport=False, forceGateTeleport=False, maxNCuts=5)
 
 startTime = datetime.datetime.now()
 logger.info(f"solving STARTED")
@@ -53,9 +53,11 @@ if not success:
     sys.exit(0)
 
 decomposedCirc, markedCirc, markedCircWithVirtualMoves, cutCirc, instantiations = cutter.getResultCircs(getInstantiations=False)
-S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
+S, A, L, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
 
 logger.info(f"S: {S}")
+logger.info(f"A: {A}")
+logger.info(f"L: {L}")
 logger.info(f"Q: {Q}")
 logger.info(f"nWireCuts: {nWireCuts}")
 logger.info(f"nGateCuts: {nGateCuts}")
