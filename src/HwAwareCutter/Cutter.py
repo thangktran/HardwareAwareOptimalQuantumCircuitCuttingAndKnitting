@@ -151,11 +151,15 @@ class Cutter:
 
     
     def logOptimizerResults(self) -> None:
-        self.logger.debug("O_vp results: ")
+        self.logger.debug("O_v results: ")
 
-        for o_vpVar in self.o_vp:
-            if is_true(self.model[o_vpVar]):
-                self.logger.debug(f"    {str(o_vpVar)} = True")
+        partitions = [[] for _ in range(self.maxNPartitions)]
+        for idx in range(len(self.o_v)):
+            o_vValue = self.model[self.o_v[idx]].as_long()
+            partitions[o_vValue].append(idx)
+
+        for idx, p in enumerate(partitions):
+            self.logger.debug(f"    {idx} : {sorted(p)}")
 
 
     # read circuit and return V, W, G, I according to the paper
@@ -240,7 +244,7 @@ class Cutter:
 
     def _addZ3Variables(self):
         # gate qubit vertex v assigned to partition p
-        self.o_vp = []
+        self.o_v = []
         # circuit is cut at edge e
         self.c_e = []
         # total number of qubits in partition p
@@ -249,24 +253,18 @@ class Cutter:
         self.Q = Int('Q')
         # S is the total cost of cutting (overhead sampling)
         self.S = Int('S')
-        # helper object to speed up look-up.
-        # o_var_lookup[vIdx][pIdx] return the z3 variable.
-        self.o_var_lookup = defaultdict(dict)
         self._populateZ3Variables()
 
 
     def _populateZ3Variables(self):
-        # populate o_vp
+        # populate o_v
         for vIdx in range(len(self.V)):
-            for pIdx in range(self.maxNPartitions):
-                variableName = f"o_{vIdx}_{pIdx}"
-                var = Bool(variableName)
-                # z3.Bool doesn't have these properties
-                # we add them to make it simpler to retrieve.
-                var.vIdx = vIdx
-                var.pIdx = pIdx
-                self.o_vp.append(var)
-                self.o_var_lookup[vIdx][pIdx] = var
+            variableName = f"o_{vIdx}"
+            var = Int(variableName)
+            # z3.Bool doesn't have these properties
+            # we add them to make it simpler to retrieve.
+            var.vIdx = vIdx
+            self.o_v.append(var)
         # populate c_e
         for eIdx in range(len(self.W)):
             variableName = f"c_{eIdx}[W]_{self.W[eIdx][0]}_{self.W[eIdx][1]}"
@@ -308,24 +306,13 @@ class Cutter:
         for var in self.c_e:
             u = var.edge[0]
             v = var.edge[1]
-            constraints = [self.o_var_lookup[u][p]!=self.o_var_lookup[v][p] for p in range(self.maxNPartitions)]
-            self.s.add(var == Or(constraints))
+            self.s.add(var == (self.o_v[u] != self.o_v[v]))
 
-        # o_vp 1st constraints: no vertex is assigned twice
-        for vIdx in range(len(self.V)):
-            constraints = [ If(i == j,
-                            True,
-                            Implies( self.o_var_lookup[vIdx][i], Not(self.o_var_lookup[vIdx][j]) )
-                            )
-                            for i in range(self.maxNPartitions) for j in range(self.maxNPartitions)]
-            self.s.add(constraints)
+        # [This constraint is no longer needed] o_vp 1st constraints: no vertex is assigned twice
 
         # o_vp 2nd constraints: at least 1 partition is assigned to each vertex v
-        for vIdx, pIdxs in self.o_var_lookup.items():
-            variables = []
-            for pIdx, var in pIdxs.items():
-                variables.append(var)
-            self.s.add(Or(variables))
+        for o_vVar in self.o_v:
+            self.s.add(And(o_vVar >= 0, o_vVar < self.maxNPartitions))
 
         # Q_p constraints
         for pIdx in range(self.maxNPartitions):
@@ -335,7 +322,7 @@ class Cutter:
             # first sum term: all o_vp with v in I
             for v in self.I:
                 vIdx = v.idx
-                var = self.o_var_lookup[vIdx][pIdx]
+                var = self.o_v[vIdx] == pIdx
                 firstSumTerm.append(If(var, 1, 0))
 
             # second sum term
@@ -344,8 +331,8 @@ class Cutter:
                 if c_eVar.edgeType == EdgeType.GateCut: # belong to G
                     continue
                 u, v = c_eVar.edge
-                o_vpVar = self.o_var_lookup[v][pIdx]
-                secondSumTerm.append(If(And(c_eVar, o_vpVar), 1, 0))
+                o_vVar = self.o_v[v] == pIdx
+                secondSumTerm.append(If(And(c_eVar, o_vVar), 1, 0))
 
             # third sum term is removed since we don't use b_e as in the original paper.
             
@@ -445,11 +432,9 @@ class Cutter:
         results = [set() for _ in range(self.maxNPartitions)]
         visited = set()
 
-        for o_vpVar in self.o_vp:
-            if is_false(self.model[o_vpVar]):
-                continue
-            pIdx = o_vpVar.pIdx
-            vIdx = o_vpVar.vIdx
+        for o_vVar in self.o_v:
+            pIdx = self.model[o_vVar].as_long()
+            vIdx = o_vVar.vIdx
             v = V[vIdx]
             q = v.qubit
 
