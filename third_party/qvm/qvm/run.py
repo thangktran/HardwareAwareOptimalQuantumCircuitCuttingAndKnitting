@@ -45,9 +45,17 @@ def run_virtual_circuit(
     Logger().getLogger(__name__).info(f"Running {num_instances} instances...")
     results = {}
     for frag, job in jobs.items():
-        counts = job.result().get_counts()
-        counts = [counts] if isinstance(counts, dict) else counts
-        results[frag] = [QuasiDistr.from_counts(c) for c in counts]
+        result = job.result()
+        try:
+            # there's case where 1 partition has 1 qubit and contains virtual gate and
+            # virtual move with no measurement => get_counts() through an exception.
+            # happens to benchmark with aqft of 10 qubits with exactly 1 WireCut and
+            # exactly 1 GateCut
+            counts = result.get_counts()
+            counts = [counts] if isinstance(counts, dict) else counts
+            results[frag] = [QuasiDistr.from_counts(c) for c in counts]
+        except Exception:
+            pass
 
     run_time = perf_counter() - now
 
