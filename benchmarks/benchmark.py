@@ -52,7 +52,7 @@ logger.info(f"success => {success}")
 if not success:
     sys.exit(0)
 
-decomposedCirc, markedCirc, cutCirc, instantiations = cutter.getResultCircs()
+decomposedCirc, markedCirc, cutCirc, instantiations = cutter.getResultCircs(getInstantiations=False)
 S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
 
 logger.info(f"S: {S}")
@@ -68,15 +68,15 @@ Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
 Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
 Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
 
-# logger.info(f"all instantiations will be saved to disk ...")
+logger.info(f"all instantiations will be saved to disk ...")
 
-# instantiationCount = 0
-# for fIdx, inst in enumerate(instantiations):
-#     for cIdx, c in enumerate(inst):
-#         Utilities.saveCircuit(c, INSTANTIANTIONS_DIR, f"{fIdx}_{cIdx}")
-#         instantiationCount+=1
+instantiationCount = 0
+for fIdx, inst in enumerate(instantiations):
+    for cIdx, c in enumerate(inst):
+        Utilities.saveCircuit(c, INSTANTIANTIONS_DIR, f"{fIdx}_{cIdx}")
+        instantiationCount+=1
 
-# logger.info(f"{instantiationCount} instantiations are saved to disk")
+logger.info(f"{instantiationCount} instantiations are saved to disk")
 
 nShots = 1000
 backend = FakeKolkataV2()
