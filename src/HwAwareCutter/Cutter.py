@@ -112,7 +112,7 @@ class Cutter:
         return True
 
 
-    # return decomposed-circuit, cut-marked-circuit, cut-circuit, instantiated-circuits
+    # return decomposed-circuit, cut-marked-circuit, cut-marked-with-move-gates-circuit, cut-circuit, instantiated-circuits
     def getResultCircs(self, getInstantiations : bool = False) -> Tuple[QuantumCircuit, QuantumCircuit, QuantumCircuit, List[List[QuantumCircuit]]]:
         if self.model is None:
             raise RuntimeError("no model exists")
@@ -128,12 +128,14 @@ class Cutter:
         markedQvmDag = DAG(markedCirc)
 
         self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
-        V, _, _, _ = self._readCirc(markedQvmDag.to_circuit())
+        markedCircWithVirtualMoves = markedQvmDag.to_circuit()
+
+        V, _, _, _ = self._readCirc(markedCircWithVirtualMoves)
         fragments = self._getFragments(V)
         markedQvmDag.fragment(fragments)
         cutCirc = markedQvmDag.to_circuit()
 
-        return copiedDecomposedCirc, markedCirc, cutCirc, [] if not getInstantiations else self._generateInstantiation(VirtualCircuit(cutCirc.copy()))
+        return copiedDecomposedCirc, markedCirc, markedCircWithVirtualMoves, cutCirc, [] if not getInstantiations else self._generateInstantiation(VirtualCircuit(cutCirc.copy()))
 
     
     # return S, nWireCuts, nGateCuts, Q, [Q_p1, Q_p2, ..., Q_pn]

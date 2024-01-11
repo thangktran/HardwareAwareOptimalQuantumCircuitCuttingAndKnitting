@@ -52,7 +52,7 @@ logger.info(f"success => {success}")
 if not success:
     sys.exit(0)
 
-decomposedCirc, markedCirc, cutCirc, instantiations = cutter.getResultCircs(getInstantiations=False)
+decomposedCirc, markedCirc, markedCircWithVirtualMoves, cutCirc, instantiations = cutter.getResultCircs(getInstantiations=False)
 S, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
 
 logger.info(f"S: {S}")
@@ -66,7 +66,8 @@ cutter.logOptimizerResults()
 
 Utilities.saveCircuit(decomposedCirc, BENCHMARK_DIR, "1_decomposedCirc")
 Utilities.saveCircuit(markedCirc, BENCHMARK_DIR, "2_markedCirc")
-Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "3_cutCirc")
+Utilities.saveCircuit(markedCircWithVirtualMoves, BENCHMARK_DIR, "3_markedCircWithVirtualMoves")
+Utilities.saveCircuit(cutCirc, BENCHMARK_DIR, "4_cutCirc")
 
 logger.info(f"all instantiations will be saved to disk ...")
 
