@@ -17,6 +17,7 @@ BENCHMARK_DIR = ""
 CIRC_NAME = "ghz"
 CIRC_N_QUBITS = 5
 CIRC_DEPTH = 1
+CUT_ONLY = True # don't do fidelity comparision
 
 # usage: python benchmark.py -p 2 -q 10 [ran|sup|su|ghz|syc|hwe|bv|qft|aqft|add|erd] <nQubit> <nDepth>
 # su doesn't need nDepth parameter, but a dummy 0 should be use
@@ -80,6 +81,10 @@ for fIdx, inst in enumerate(instantiations):
         instantiationCount+=1
 
 logger.info(f"{instantiationCount} instantiations are saved to disk")
+
+if CUT_ONLY:
+    logger.info("CUT_ONLY == True => Simulation will not run.")
+    sys.exit(0)
 
 nShots = 1000
 backend = FakeKolkataV2()
