@@ -143,7 +143,7 @@ class Cutter:
         markedCircWithVirtualMoves = markedQvmDag.to_circuit()
 
         V, _, _, _ = self._readCirc(markedCircWithVirtualMoves)
-        fragments = self._getFragments(V)
+        fragments = self._getFragments(V, set(markedCircWithVirtualMoves.qubits))
 
         self.logger.debug("fragments:")
         for idx, frag in enumerate(fragments):
@@ -583,7 +583,7 @@ class Cutter:
                 cut_ctr += 1
     
 
-    def _getFragments(self, V : List[DagVertex]) -> List[Set[Qubit]]:
+    def _getFragments(self, V : List[DagVertex], qubits : Set[Qubit]) -> List[Set[Qubit]]:
         results = [set() for _ in range(self.maxNPartitions)]
         visited = set()
 
@@ -600,6 +600,30 @@ class Cutter:
 
             visited.add(q)
             results[pIdx].add(q)
+        
+        # there exists qubits without any gates => no edges from our algorithm.
+        leftOverQubits = qubits - visited
+        availableSpots = 0
+
+        for idx in range(self.maxNPartitions):
+            availableSpots += self.maxNQubitsPerPartition[idx] - len(results[idx])
+
+        if availableSpots < len(leftOverQubits):
+            raise RuntimeError("not enough available spots")
+        
+        for idx in range(self.maxNPartitions):
+            availableSpotsInThisPartition = self.maxNQubitsPerPartition[idx] - len(results[idx])
+            if availableSpotsInThisPartition == 0:
+                continue
+
+            qubitsToAdd = []
+            while availableSpotsInThisPartition>0 and len(leftOverQubits)>0:
+                qubitsToAdd.append(leftOverQubits.pop())
+                availableSpotsInThisPartition-=1
+
+            if qubitsToAdd:
+                self.logger.info(f"added {len(qubitsToAdd)} left over qubits {qubitsToAdd} to partition {idx}")
+                results[idx].update(qubitsToAdd)
 
         return results
     
