@@ -38,7 +38,7 @@ logger = Logger().getLogger()
 
 inputCirc = genCirc(CIRC_NAME, CIRC_N_QUBITS, CIRC_DEPTH)
 
-cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCuts=None, forceNGateCuts=None, forceWireTeleport=False, forceGateTeleport=False, maxNCuts=5)
+cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCuts=1, forceNGateCuts=0, maxNCuts=5)
 
 startTime = datetime.datetime.now()
 logger.info(f"solving STARTED")

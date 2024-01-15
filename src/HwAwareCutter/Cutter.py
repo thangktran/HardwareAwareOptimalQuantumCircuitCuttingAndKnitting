@@ -36,7 +36,7 @@ class EdgeType(Enum):
 
 
 class Cutter:
-    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int | List[int] = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, forceWireTeleport : bool = False, forceGateTeleport : bool = False, maxNCuts : int | None = None) -> None:
+    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int | List[int] = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNCuts : int | None = None) -> None:
         self.logger = Logger().getLogger(__name__)
         self.inputCirc = inputCirc.copy()
         self.maxNPartitions = maxNPartitions
@@ -60,9 +60,6 @@ class Cutter:
         if forceNGateCuts is not None:
             assert(forceNGateCuts>=0)
             self.forceNGateCuts = forceNGateCuts
-
-        self.forceGateTeleport = forceGateTeleport
-        self.forceWireTeleport = forceWireTeleport
         
         self.maxNCuts = None
         if maxNCuts is not None:
@@ -463,12 +460,6 @@ class Cutter:
             self.s.add(Sum(sumWireCuts) == self.forceNWireCuts)
         if self.forceNGateCuts is not None:
             self.s.add(Sum(sumGateCuts) == self.forceNGateCuts)
-        if self.forceGateTeleport:
-            gateTeleports = [self.c_e_teleported[idx] for idx in range(len(self.c_e)) if self.c_e[idx].edgeType == EdgeType.GateCut]
-            self.s.add(Or(gateTeleports))
-        if self.forceWireTeleport:
-            wireTeleports = [self.c_e_teleported[idx] for idx in range(len(self.c_e)) if self.c_e[idx].edgeType == EdgeType.WireCut]
-            self.s.add(Or(wireTeleports))
         if self.maxNCuts is not None:
             self.s.add(Sum(sumWireCuts)+Sum(sumGateCuts) <= self.maxNCuts)
 
