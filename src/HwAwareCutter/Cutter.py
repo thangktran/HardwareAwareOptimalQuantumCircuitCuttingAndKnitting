@@ -37,7 +37,7 @@ class EdgeType(Enum):
 
 class Cutter:
     # maxNQpdCuts: only use QPD cuts up to this amount. Afterward, teleportation will be used for cutting.
-    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int | List[int] = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNQpdCuts : int | None = None, maxNCuts : int | None = None) -> None:
+    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int | List[int] = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNQpdCuts : int | None = None, maxNCuts : int | None = None, maxCutsPerPartitions : int | None = None) -> None:
         self.logger = Logger().getLogger(__name__)
         self.inputCirc = inputCirc.copy()
         self.maxNPartitions = maxNPartitions
@@ -77,6 +77,10 @@ class Cutter:
                 assert(maxNQpdCuts<=self.maxNCuts)
             self.maxNQpdCuts = maxNQpdCuts
         
+        self.maxCutsPerPartitions = maxCutsPerPartitions
+        if self.maxCutsPerPartitions is not None:
+            assert(self.maxCutsPerPartitions>0)
+
         self.decomposedCirc = inputCirc.decompose()
         self.V, self.W, self.G, self.I = self._readCirc(self.decomposedCirc)
 
@@ -156,7 +160,7 @@ class Cutter:
         return copiedDecomposedCirc, markedCirc, markedCircWithVirtualMoves, cutCirc, [] if not getInstantiations else self._generateInstantiation(VirtualCircuit(cutCirc.copy()))
 
     
-    # return S, A, L, nWireCuts, nGateCuts, Q, [Q_p1, Q_p2, ..., Q_pn]
+    # return S, A, L, nWireCuts, nGateCuts, Q, [Q_p1, Q_p2, ..., Q_pn], C, [C_p1, C_p2, ..., C_pn]
     def getModelKeyResults(self) -> Tuple[int, int, int, int, List[int]]:
         if self.model is None:
             raise RuntimeError("no model exists")
@@ -165,11 +169,14 @@ class Cutter:
         A = self.model[self.A].as_long()
         L = self.model[self.L].as_long()
         Q = self.model[self.Q].as_long()
+        C = self.model[self.C].as_long()
         Q_pArr = []
+        C_pArr = []
         for pIdx in range(self.maxNPartitions):
             Q_pArr.append( self.model[self.Q_p[pIdx]].as_long() )
+            C_pArr.append( self.model[self.C_p[pIdx]].as_long() )
         
-        return S, A, L, self.nWireCuts, self.nGateCuts, Q, Q_pArr
+        return S, A, L, self.nWireCuts, self.nGateCuts, Q, Q_pArr, C, C_pArr
 
     
     def logOptimizerResults(self) -> None:
@@ -283,6 +290,10 @@ class Cutter:
         self.A = Int('A')
         # L is total teleportation latency
         self.L = Int('L')
+        # C is maximum number of QPD cut per partition
+        self.C = Int('C')
+        # total number of cut in partition p
+        self.C_p = []
         # helper object to speed up look-up.
         # o_var_lookup[vIdx][pIdx] return the z3 variable.
         self.o_var_lookup = defaultdict(dict)
@@ -337,6 +348,14 @@ class Cutter:
             # we add them to make it simpler to retrieve.
             var.pIdx = pIdx
             self.Q_p.append(var)
+        # populate C_p
+        for pIdx in range(self.maxNPartitions):
+            variableName = f"C_p{pIdx}"
+            var = Int(variableName)
+            # z3.Int doesn't have these properties
+            # we add them to make it simpler to retrieve.
+            var.pIdx = pIdx
+            self.C_p.append(var)
 
 
     def _addZ3ConstraintsAndObjectives(self):
@@ -390,6 +409,18 @@ class Cutter:
             thirdSumTerm = []
             
             self.s.add(self.Q_p[pIdx] == Sum(firstSumTerm+secondSumTerm+thirdSumTerm))
+
+        # C_p constraints
+        for pIdx in range(self.maxNPartitions):
+            sumTerm = []
+            for idx in range(len(self.c_e)):
+                c_eVar = self.c_e[idx]
+                c_e_teleportVar = self.c_e_teleported[idx]
+                u, v = c_eVar.edge
+                o_vp_u_Var = self.o_var_lookup[u][pIdx]
+                o_vp_v_Var = self.o_var_lookup[v][pIdx]
+                sumTerm.append( If(And(c_eVar, Or(o_vp_u_Var, o_vp_v_Var), Not(c_e_teleportVar)), 1, 0) )
+            self.s.add(self.C_p[pIdx] == Sum(sumTerm))
             
         GATE_CUT_QPD_COST = {
             "overheadSampling" : 6,
@@ -453,6 +484,10 @@ class Cutter:
         for pIdx in range(self.maxNPartitions):
             self.s.add(self.Q >= self.Q_p[pIdx])
             self.s.add(self.Q_p[pIdx] <= self.maxNQubitsPerPartition[pIdx])
+            
+            self.s.add(self.C >= self.C_p[pIdx])
+            if self.maxCutsPerPartitions is not None:
+                self.s.add(self.C_p[pIdx] <= self.maxCutsPerPartitions)
         
         sumWireCuts = None
         sumGateCuts = None
@@ -482,6 +517,7 @@ class Cutter:
         self.s.minimize(self.S)
         self.s.minimize(self.A)
         self.s.minimize(self.L)
+        self.s.minimize(self.C)
         
     
     # FIXME: teleport is not yet supported. Currently VirtualGate and MoveGate are used.

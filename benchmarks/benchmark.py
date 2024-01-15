@@ -38,7 +38,7 @@ logger = Logger().getLogger()
 
 inputCirc = genCirc(CIRC_NAME, CIRC_N_QUBITS, CIRC_DEPTH)
 
-cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCuts=None, forceNGateCuts=None, maxNQpdCuts=2, maxNCuts=5)
+cutter = Cutter(inputCirc=inputCirc, maxNPartitions=BENCHMARK_MAX_PARTITIONS, maxNQubitsPerPartition=BENCHMARK_MAX_N_QUBITS, forceNWireCuts=None, forceNGateCuts=None, maxNQpdCuts=5, maxNCuts=5, maxCutsPerPartitions=5)
 
 startTime = datetime.datetime.now()
 logger.info(f"solving STARTED")
@@ -54,16 +54,21 @@ if not success:
     sys.exit(0)
 
 decomposedCirc, markedCirc, markedCircWithVirtualMoves, cutCirc, instantiations = cutter.getResultCircs(getInstantiations=False)
-S, A, L, nWireCuts, nGateCuts, Q, Q_pArr = cutter.getModelKeyResults()
+S, A, L, nWireCuts, nGateCuts, Q, Q_pArr, C, C_pArr = cutter.getModelKeyResults()
 
 logger.info(f"S: {S}")
 logger.info(f"A: {A}")
 logger.info(f"L: {L}")
 logger.info(f"Q: {Q}")
+logger.info(f"C: {C}")
 logger.info(f"nWireCuts: {nWireCuts}")
 logger.info(f"nGateCuts: {nGateCuts}")
-for idx, Q_pi in enumerate(Q_pArr):
-    logger.info(f"Q_p{idx}: {Q_pi}")
+for idx in range(BENCHMARK_MAX_PARTITIONS):
+    logger.info(f"  Q_p{idx}: {Q_pArr[idx]}")
+logger.info("")
+for idx in range(BENCHMARK_MAX_PARTITIONS):
+    logger.info(f"  C_p{idx}: {C_pArr[idx]}")
+
 
 cutter.logOptimizerResults()
 
