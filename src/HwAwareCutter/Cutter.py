@@ -433,7 +433,7 @@ class Cutter:
         # if use self.S directly, the program does NOT terminate.
         self.s.add(self.S == totalOverheadSampling)
         self.s.add(self.S > 1)
-        self.s.add(self.A == totalAncilla)
+        self.s.add(self.A == totalAncilla * totalOverheadSampling)
         self.s.add(self.L == totalTeleportLatency)
 
         for pIdx in range(self.maxNPartitions):
