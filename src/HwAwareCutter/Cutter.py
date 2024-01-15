@@ -53,12 +53,12 @@ class Cutter:
 
         self.forceNWireCuts = None
         if forceNWireCuts is not None:
-            assert(forceNWireCuts>0)
+            assert(forceNWireCuts>=0)
             self.forceNWireCuts = forceNWireCuts
         
         self.forceNGateCuts = None
         if forceNGateCuts is not None:
-            assert(forceNGateCuts>0)
+            assert(forceNGateCuts>=0)
             self.forceNGateCuts = forceNGateCuts
 
         self.forceGateTeleport = forceGateTeleport
@@ -135,7 +135,17 @@ class Cutter:
 
         V, _, _, _ = self._readCirc(markedCircWithVirtualMoves)
         fragments = self._getFragments(V)
-        markedQvmDag.fragment(fragments)
+
+        self.logger.debug("fragments:")
+        for idx, frag in enumerate(fragments):
+            qubitNames = [f"{q.register.name}{q.index}" for q in frag]
+            self.logger.debug(f"    {idx}: {qubitNames}")
+
+        qubitMapping = markedQvmDag.fragment(fragments)
+        self.logger.debug("qubit mapping:")
+        for old, new in qubitMapping.items():
+            self.logger.debug(f"    {old.register.name}{old.index} => {new.register.name}_{new.index}")
+
         cutCirc = markedQvmDag.to_circuit()
 
         return copiedDecomposedCirc, markedCirc, markedCircWithVirtualMoves, cutCirc, [] if not getInstantiations else self._generateInstantiation(VirtualCircuit(cutCirc.copy()))

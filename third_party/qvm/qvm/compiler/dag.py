@@ -198,6 +198,8 @@ class DAG(nx.DiGraph):
             instr.qubits = [qubit_map[qubit] for qubit in instr.qubits]
         self._qregs = new_frags
 
+        return qubit_map
+
 
 def dag_to_qcg(dag: DAG, use_qubit_idx: bool = False) -> nx.Graph:
     graph = nx.Graph()
