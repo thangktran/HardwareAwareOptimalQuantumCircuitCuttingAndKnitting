@@ -389,12 +389,12 @@ class Cutter:
         GATE_CUT_TELE_COST = {
             "overheadSampling" : 1,
             "ancilla" : 2, # TODO: check value
-            "teleportLatency" : 1 # TODO: check value
+            "teleportLatency" : 10 # NOTE: use 10 to counter the scale different from overheadSampling.
         }
         WIRE_CUT_TELE_COST = {
             "overheadSampling" : 1,
             "ancilla" : 2, # TODO: check value
-            "teleportLatency" : 1 # TODO: check value
+            "teleportLatency" : 10 # NOTE: use 10 to counter the scale different from overheadSampling.
         }
         
         totalOverheadSampling = 1
