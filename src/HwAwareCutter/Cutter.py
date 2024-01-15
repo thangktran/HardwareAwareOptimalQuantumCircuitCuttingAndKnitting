@@ -36,7 +36,8 @@ class EdgeType(Enum):
 
 
 class Cutter:
-    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int | List[int] = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNCuts : int | None = None) -> None:
+    # maxNQpdCuts: only use QPD cuts up to this amount. Afterward, teleportation will be used for cutting.
+    def __init__(self, inputCirc : QuantumCircuit, maxNPartitions : int = 2, maxNQubitsPerPartition : int | List[int] = 10, forceNWireCuts : int | None = None, forceNGateCuts : int | None = None, maxNQpdCuts : int | None = None, maxNCuts : int | None = None) -> None:
         self.logger = Logger().getLogger(__name__)
         self.inputCirc = inputCirc.copy()
         self.maxNPartitions = maxNPartitions
@@ -68,6 +69,13 @@ class Cutter:
             assert(maxNCuts>0)
             assert(maxNCuts >= nWireCuts+nGateCuts)
             self.maxNCuts = maxNCuts
+
+        self.maxNQpdCuts = None
+        if maxNQpdCuts is not None:
+            assert(maxNQpdCuts>=0)
+            if self.maxNCuts is not None:
+                assert(maxNQpdCuts<=self.maxNCuts)
+            self.maxNQpdCuts = maxNQpdCuts
         
         self.decomposedCirc = inputCirc.decompose()
         self.V, self.W, self.G, self.I = self._readCirc(self.decomposedCirc)
@@ -439,7 +447,6 @@ class Cutter:
         # NOTE: an extra variable `totalOverheadSampling` is required.
         # if use self.S directly, the program does NOT terminate.
         self.s.add(self.S == totalOverheadSampling)
-        self.s.add(self.S > 1)
         self.s.add(self.A == totalAncilla * totalOverheadSampling)
         self.s.add(self.L == totalTeleportLatency)
 
@@ -462,6 +469,13 @@ class Cutter:
             self.s.add(Sum(sumGateCuts) == self.forceNGateCuts)
         if self.maxNCuts is not None:
             self.s.add(Sum(sumWireCuts)+Sum(sumGateCuts) <= self.maxNCuts)
+
+        if self.maxNQpdCuts is not None:
+            QpdCuts = [If(And(self.c_e[idx], Not(self.c_e_teleported[idx])), 1, 0) for idx in range(len(self.c_e))]
+            sumQpdCuts = Sum(QpdCuts)
+
+            self.s.add( [Implies(c_e_tele, sumQpdCuts==self.maxNQpdCuts) for c_e_tele in self.c_e_teleported] )
+            self.s.add(sumQpdCuts <= self.maxNQpdCuts)
 
         # objectives
         self.s.minimize(self.Q)
