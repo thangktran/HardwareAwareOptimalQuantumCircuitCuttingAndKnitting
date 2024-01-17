@@ -186,9 +186,9 @@ class Cutter:
             if is_true(self.model[o_vpVar]):
                 self.logger.debug(f"    {str(o_vpVar)} = True")
 
-        for c_e_teleportedVar in self.c_e_teleported:
-            if is_true(self.model[c_e_teleportedVar]):
-                self.logger.debug(f"    {str(c_e_teleportedVar)} = True")
+        for b_eVar in self.b_e:
+            if is_true(self.model[b_eVar]):
+                self.logger.debug(f"    {str(b_eVar)} = True")
 
 
     # read circuit and return V, W, G, I according to the paper
@@ -223,7 +223,8 @@ class Cutter:
             assert(len(circuit.find_bit(qubit1).registers)==1)
             v0Idx = len(V)
             v1Idx = v0Idx + 1
-            v.op.label = f"{v0Idx}_{v1Idx}"
+            if v.op.label is None:
+                v.op.label = f"{v0Idx}_{v1Idx}"
             # add 2 vertices
             v0 = DagVertex(v0Idx, qubit0, qubitGateCounter[qubit0], v, v0Idx, v1Idx)
             v1 = DagVertex(v1Idx, qubit1, qubitGateCounter[qubit1], v, v0Idx, v1Idx)
@@ -277,9 +278,9 @@ class Cutter:
         # circuit is cut at edge e
         self.c_e = []
         # there're 2 cut-operation: with QPD or teleportation.
-        # c_e_teleported[idx] indicate whether edge c_e[idx] was cut using teleportation.
+        # b_e[idx] indicate whether edge c_e[idx] was cut using teleportation.
         # Boolean value, False == QPD, True == teleportation 
-        self.c_e_teleported = []
+        self.b_e = []
         # total number of qubits in partition p
         self.Q_p = []
         # Q is maximum number of qubit per partition
@@ -314,15 +315,15 @@ class Cutter:
                 self.o_var_lookup[vIdx][pIdx] = var
         # populate c_e
         for eIdx in range(len(self.W)):
-            variableName = f"c_{eIdx}[W]_{self.W[eIdx][0]}_{self.W[eIdx][1]}"
-            var = Bool(variableName)
+            variableName = f"{eIdx}[W]_{self.W[eIdx][0]}_{self.W[eIdx][1]}"
+            var = Bool(f"c_{variableName}")
             # z3.Bool doesn't have these properties
             # we add them to make it simpler to retrieve.
             var.eIdx = eIdx
             var.edge = self.W[eIdx]
             var.edgeType = EdgeType.WireCut
             self.c_e.append(var)
-            self.c_e_teleported.append(Bool(f"{variableName}_teleported"))
+            self.b_e.append(Bool(f"b_{variableName}"))
         for eIdx in range(len(self.G)):
             u, _ = self.G[eIdx]
             vertex = self.V[u]
@@ -330,15 +331,15 @@ class Cutter:
             # If a gate is not supported for Virtualization => Don't cut it.
             if vertex.opNode.op.name not in VIRTUAL_GATE_TYPES:
                 continue
-            variableName = f"c_{eIdx}[G]_{self.G[eIdx][0]}_{self.G[eIdx][1]}"
-            var = Bool(variableName)
+            variableName = f"{eIdx}[G]_{self.G[eIdx][0]}_{self.G[eIdx][1]}"
+            var = Bool(f"c_{variableName}")
             # z3.Bool doesn't have these properties
             # we add them to make it simpler to retrieve.
             var.eIdx = eIdx
             var.edge = self.G[eIdx]
             var.edgeType = EdgeType.GateCut
             self.c_e.append(var)
-            self.c_e_teleported.append(Bool(f"{variableName}_teleported"))
+            self.b_e.append(Bool(f"b_{variableName}"))
         assert(self.maxNPartitions <= len(self.V))
         # populate Q_p
         for pIdx in range(self.maxNPartitions):
@@ -367,7 +368,7 @@ class Cutter:
             constraints = [self.o_var_lookup[u][p]!=self.o_var_lookup[v][p] for p in range(self.maxNPartitions)]
             self.s.add(c_eVar == Or(constraints))
 
-            self.s.add(Implies(self.c_e_teleported[idx], c_eVar))
+            self.s.add(Implies(self.b_e[idx], c_eVar))
 
         # o_vp 1st constraints: no vertex is assigned twice
         for vIdx in range(len(self.V)):
@@ -405,8 +406,13 @@ class Cutter:
                 o_vpVar = self.o_var_lookup[v][pIdx]
                 secondSumTerm.append(If(And(c_eVar, o_vpVar), 1, 0))
 
-            # third sum term is removed since we don't use b_e as in the original paper.
-            thirdSumTerm = []
+            # third sum term
+            for idx, b_eVar in enumerate(self.b_e):
+                c_eVar = self.c_e[idx]
+                u, v = c_eVar.edge
+                o_upVar = self.o_var_lookup[u][pIdx]
+                o_vpVar = self.o_var_lookup[v][pIdx]
+                thirdSumTerm.append( If(And(b_eVar, Or(o_upVar, o_vpVar)), 1, 0) )
             
             self.s.add(self.Q_p[pIdx] == Sum(firstSumTerm+secondSumTerm+thirdSumTerm))
 
@@ -415,11 +421,11 @@ class Cutter:
             sumTerm = []
             for idx in range(len(self.c_e)):
                 c_eVar = self.c_e[idx]
-                c_e_teleportVar = self.c_e_teleported[idx]
+                b_eVar = self.b_e[idx]
                 u, v = c_eVar.edge
                 o_vp_u_Var = self.o_var_lookup[u][pIdx]
                 o_vp_v_Var = self.o_var_lookup[v][pIdx]
-                sumTerm.append( If(And(c_eVar, Or(o_vp_u_Var, o_vp_v_Var), Not(c_e_teleportVar)), 1, 0) )
+                sumTerm.append( If(And(c_eVar, Or(o_vp_u_Var, o_vp_v_Var), Not(b_eVar)), 1, 0) )
             self.s.add(self.C_p[pIdx] == Sum(sumTerm))
             
         GATE_CUT_QPD_COST = {
@@ -452,24 +458,24 @@ class Cutter:
             
             if self.c_e[idx].edgeType == EdgeType.GateCut:
                 
-                overheadSamplingCost = If(self.c_e_teleported[idx], GATE_CUT_TELE_COST["overheadSampling"], GATE_CUT_QPD_COST["overheadSampling"])
+                overheadSamplingCost = If(self.b_e[idx], GATE_CUT_TELE_COST["overheadSampling"], GATE_CUT_QPD_COST["overheadSampling"])
                 totalOverheadSampling *= If(self.c_e[idx], overheadSamplingCost, 1)
 
-                ancillaCost = If(self.c_e_teleported[idx], GATE_CUT_TELE_COST["ancilla"], GATE_CUT_QPD_COST["ancilla"])
+                ancillaCost = If(self.b_e[idx], GATE_CUT_TELE_COST["ancilla"], GATE_CUT_QPD_COST["ancilla"])
                 totalAncilla += If(self.c_e[idx], ancillaCost, 0)
 
-                latencyCost = If(self.c_e_teleported[idx], GATE_CUT_TELE_COST["teleportLatency"], GATE_CUT_QPD_COST["teleportLatency"])
+                latencyCost = If(self.b_e[idx], GATE_CUT_TELE_COST["teleportLatency"], GATE_CUT_QPD_COST["teleportLatency"])
                 totalTeleportLatency += If(self.c_e[idx], latencyCost, 0)
 
             elif self.c_e[idx].edgeType == EdgeType.WireCut:
                 
-                overheadSamplingCost = If(self.c_e_teleported[idx], WIRE_CUT_TELE_COST["overheadSampling"], WIRE_CUT_QPD_COST["overheadSampling"])
+                overheadSamplingCost = If(self.b_e[idx], WIRE_CUT_TELE_COST["overheadSampling"], WIRE_CUT_QPD_COST["overheadSampling"])
                 totalOverheadSampling *= If(self.c_e[idx], overheadSamplingCost, 1)
 
-                ancillaCost = If(self.c_e_teleported[idx], WIRE_CUT_TELE_COST["ancilla"], WIRE_CUT_QPD_COST["ancilla"])
+                ancillaCost = If(self.b_e[idx], WIRE_CUT_TELE_COST["ancilla"], WIRE_CUT_QPD_COST["ancilla"])
                 totalAncilla += If(self.c_e[idx], ancillaCost, 0)
 
-                latencyCost = If(self.c_e_teleported[idx], WIRE_CUT_TELE_COST["teleportLatency"], WIRE_CUT_QPD_COST["teleportLatency"])
+                latencyCost = If(self.b_e[idx], WIRE_CUT_TELE_COST["teleportLatency"], WIRE_CUT_QPD_COST["teleportLatency"])
                 totalTeleportLatency += If(self.c_e[idx], latencyCost, 0)
 
             else:
@@ -506,10 +512,10 @@ class Cutter:
             self.s.add(Sum(sumWireCuts)+Sum(sumGateCuts) <= self.maxNCuts)
 
         if self.maxNQpdCuts is not None:
-            QpdCuts = [If(And(self.c_e[idx], Not(self.c_e_teleported[idx])), 1, 0) for idx in range(len(self.c_e))]
+            QpdCuts = [If(And(self.c_e[idx], Not(self.b_e[idx])), 1, 0) for idx in range(len(self.c_e))]
             sumQpdCuts = Sum(QpdCuts)
 
-            self.s.add( [Implies(c_e_tele, sumQpdCuts==self.maxNQpdCuts) for c_e_tele in self.c_e_teleported] )
+            self.s.add( [Implies(c_e_tele, sumQpdCuts==self.maxNQpdCuts) for c_e_tele in self.b_e] )
             self.s.add(sumQpdCuts <= self.maxNQpdCuts)
 
         # objectives
@@ -532,7 +538,7 @@ class Cutter:
             v = V[vIdx]
             if c_eVar.edgeType == EdgeType.GateCut:
                 gateName = f"{v.opNode.name} {v.opNode.op.label}"
-                if is_true(self.model[self.c_e_teleported[idx]]):
+                if is_true(self.model[self.b_e[idx]]):
                     gateName += " TELE"
                 dag.substitute_node(u.opNode, VIRTUAL_GATE_TYPES[v.opNode.name](u.opNode.op, gateName))
                 self.logger.info(f"GateCut {gateName} is replaced.")
@@ -541,7 +547,7 @@ class Cutter:
                 newDag.add_qubits(u.opNode.qargs)
                 newDag.apply_operation_back(op=u.opNode.op, qargs=u.opNode.qargs)
                 wireCutLabel = f"{uIdx}_{vIdx}"
-                if is_true(self.model[self.c_e_teleported[idx]]):
+                if is_true(self.model[self.b_e[idx]]):
                     wireCutLabel += " TELE"
                 wirecutOp = WireCut(1, f"WC {wireCutLabel}")
                 wirecutOp.wireCutLabel = wireCutLabel
