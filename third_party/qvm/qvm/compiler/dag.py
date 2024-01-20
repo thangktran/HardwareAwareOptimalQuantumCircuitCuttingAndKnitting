@@ -18,8 +18,10 @@ from qvm.virtual_gates import VIRTUAL_GATE_TYPES
 
 
 class DAG(nx.DiGraph):
-    def __init__(self, circuit: QuantumCircuit):
-        circuit = circuit.copy()
+    def __init__(self, circuit: QuantumCircuit, copy_circuit : bool = True):
+        
+        if copy_circuit:
+            circuit = circuit.copy()
 
         def _next_op_on_qubit(qubit: int, from_idx: int) -> int:
             for i, instr in enumerate(circuit[from_idx + 1 :]):

@@ -130,20 +130,20 @@ class Cutter:
             raise RuntimeError("no model exists")
 
         copiedDecomposedCirc = self.decomposedCirc.copy()
-        beforeCutDag = circuit_to_dag(copiedDecomposedCirc)
         # update V
         V, _, _, _ = self._readCirc(copiedDecomposedCirc)
+        beforeCutDag = circuit_to_dag(copiedDecomposedCirc, False)
 
         
         markedDag = self._repaceGateCutsAndMarkWireCuts(beforeCutDag, V)
-        markedCirc = dag_to_circuit(markedDag)
-        markedQvmDag = DAG(markedCirc)
+        markedCircToShow = dag_to_circuit(markedDag)
+        markedQvmDag = DAG(dag_to_circuit(markedDag, False), False)
 
-        self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
+        vmoveToVIdxMapping, moveQubits = self._replaceWireCutMarkWithVirtualMoveGates(markedQvmDag)
         markedCircWithVirtualMoves = markedQvmDag.to_circuit()
+        markedCircWithVirtualMovesToShow = markedCircWithVirtualMoves.copy()
 
-        V, _, _, _ = self._readCirc(markedCircWithVirtualMoves)
-        fragments = self._getFragments(V, set(markedCircWithVirtualMoves.qubits))
+        fragments = self._getFragments(V, set(markedCircWithVirtualMoves.qubits), vmoveToVIdxMapping, moveQubits)
 
         self.logger.debug("fragments:")
         for idx, frag in enumerate(fragments):
@@ -157,7 +157,7 @@ class Cutter:
 
         cutCirc = markedQvmDag.to_circuit()
 
-        return copiedDecomposedCirc, markedCirc, markedCircWithVirtualMoves, cutCirc, [] if not getInstantiations else self._generateInstantiation(VirtualCircuit(cutCirc.copy()))
+        return self.decomposedCirc, markedCircToShow, markedCircWithVirtualMovesToShow, cutCirc, [] if not getInstantiations else self._generateInstantiation(VirtualCircuit(cutCirc.copy()))
 
     
     # return S, A, L, nWireCuts, nGateCuts, Q, [Q_p1, Q_p2, ..., Q_pn], C, [C_p1, C_p2, ..., C_pn]
@@ -566,9 +566,13 @@ class Cutter:
         return dag
 
 
-    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG):
+    def _replaceWireCutMarkWithVirtualMoveGates(self, dag: DAG) -> Tuple[List[int], List[Qubit]]:
+
+        moveQubits = []
+        vmoveToVIdxMapping = []
+
         if self.nWireCuts == 0:
-            return 
+            return vmoveToVIdxMapping, moveQubits
 
         move_reg = QuantumRegister(self.nWireCuts, "vmove")
         dag.add_qreg(move_reg)
@@ -586,26 +590,43 @@ class Cutter:
                 instr.operation = VirtualMove(SwapGate(label=instr.operation.wireCutLabel))
                 instr.qubits.append(move_reg[cut_ctr])
                 qubit_mapping[instr.qubits[0]] = instr.qubits[1]
+                # get the vIdx on the right hand side of WC mark.
+                vIdxStr = instr.operation.label.split()[-1].split("_")[-1]
+                vIdx = int(vIdxStr)
+                vmoveToVIdxMapping.append(vIdx)
+                moveQubits.append(instr.qubits[1])
                 cut_ctr += 1
+        
+        return vmoveToVIdxMapping, moveQubits
     
 
-    def _getFragments(self, V : List[DagVertex], qubits : Set[Qubit]) -> List[Set[Qubit]]:
+    def _getFragments(self, V : List[DagVertex], qubits : Set[Qubit], vmoveToVIdxMapping : List[int], moveQubits : List[Qubit]) -> List[Set[Qubit]]:
         results = [set() for _ in range(self.maxNPartitions)]
         visited = set()
+
+        vIdxToPIdxMapping = {}
 
         for o_vpVar in self.o_vp:
             if is_false(self.model[o_vpVar]):
                 continue
             pIdx = o_vpVar.pIdx
             vIdx = o_vpVar.vIdx
+            vIdxToPIdxMapping[vIdx] = pIdx
             v = V[vIdx]
             q = v.qubit
 
-            if q in visited:
+            if q in visited or q in moveQubits:
                 continue
 
             visited.add(q)
             results[pIdx].add(q)
+        
+        # fragment move qubits
+        for vMoveIdx, VIdx in enumerate(vmoveToVIdxMapping):
+            moveQubit = moveQubits[vMoveIdx]
+            pIdx = vIdxToPIdxMapping[vIdx]
+            results[pIdx].add(moveQubit)
+            visited.add(moveQubit)
         
         # there exists qubits without any gates => no edges from our algorithm.
         leftOverQubits = qubits - visited
