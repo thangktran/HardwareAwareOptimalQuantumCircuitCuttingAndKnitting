@@ -190,6 +190,23 @@ class Cutter:
             if is_true(self.model[b_eVar]):
                 self.logger.debug(f"    {str(b_eVar)} = True")
 
+        qpdEdgesVIdx = []
+        teleportEdgesVIdx = []
+
+        nVertices = len(self.V)
+        for idx in range(len(self.c_e)):
+            c_eVar = self.c_e[idx]
+            b_eVar = self.b_e[idx]
+            v0Idx = c_eVar.edge[0]
+            v1Idx = c_eVar.edge[1]
+            if is_true(self.model[b_eVar]):
+                teleportEdgesVIdx.append(v0Idx)
+            if is_true(self.model[c_eVar]) and is_false(self.model[b_eVar]):
+                qpdEdgesVIdx.append(v1Idx)
+
+        self.logger.debug(f"Edges (nVertices = {nVertices}):")
+        self.logger.debug(f"    qpdEdgesVIdx: {sorted(qpdEdgesVIdx)}")
+        self.logger.debug(f"    teleportEdgesVIdx: {sorted(teleportEdgesVIdx)}")
 
     # read circuit and return V, W, G, I according to the paper
     def _readCirc(self, circuit : QuantumCircuit) -> Tuple[List[DagVertex], List, List, List[DagVertex]]:
@@ -298,6 +315,10 @@ class Cutter:
         # helper object to speed up look-up.
         # o_var_lookup[vIdx][pIdx] return the z3 variable.
         self.o_var_lookup = defaultdict(dict)
+
+        self.qpdEdgesVIdx = []
+        self.teleportEdgesVIdx = []
+
         self._populateZ3Variables()
 
 
@@ -517,6 +538,30 @@ class Cutter:
 
             self.s.add( [Implies(c_e_tele, sumQpdCuts==self.maxNQpdCuts) for c_e_tele in self.b_e] )
             self.s.add(sumQpdCuts <= self.maxNQpdCuts)
+
+        nVertices = len(self.V)
+
+        for eIdx in range(len(self.c_e)):
+            c_eVar = self.c_e[eIdx]
+            b_eVar = self.b_e[eIdx]
+            v0Idx = c_eVar.edge[0]
+            v1Idx = c_eVar.edge[1]
+
+            self.qpdEdgesVIdx.append(If(And(c_eVar, Not(b_eVar)), v1Idx, -1))
+            self.teleportEdgesVIdx.append(If(b_eVar, v0Idx, nVertices))
+
+        def minVar(v):
+            a = v[0]
+            for b in v[1:]:
+                a = If(b < a, b, a)
+            return a
+        def maxVar(v):
+            a = v[0]
+            for b in v[1:]:
+                a = If(b > a, b, a)
+            return a
+        
+        self.s.add_soft(maxVar(self.qpdEdgesVIdx) < minVar(self.teleportEdgesVIdx))
 
         # objectives
         self.s.minimize(self.Q)
