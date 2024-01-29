@@ -667,7 +667,7 @@ class Cutter:
             results[pIdx].add(q)
         
         # fragment move qubits
-        for vMoveIdx, VIdx in enumerate(vmoveToVIdxMapping):
+        for vMoveIdx, vIdx in enumerate(vmoveToVIdxMapping):
             moveQubit = moveQubits[vMoveIdx]
             pIdx = vIdxToPIdxMapping[vIdx]
             results[pIdx].add(moveQubit)
