@@ -4,7 +4,8 @@ import sys
 
 import matplotlib.pyplot as plt
 
-from qiskit.circuit import Qubit, QuantumCircuit
+from qiskit import transpile
+from qiskit.circuit import QuantumCircuit
 from qiskit.dagcircuit.dagcircuit import DAGCircuit
 from qiskit.providers import BackendV2
 from qiskit.quantum_info import hellinger_fidelity
@@ -13,7 +14,7 @@ from qiskit_aer import AerSimulator
 
 
 from qvm.quasi_distr import QuasiDistr
-from qvm.run import run_virtual_circuit
+from qvm.run import run_virtual_circuit, generate_instantiations
 from qvm.virtual_circuit import VirtualCircuit
 
 from HwAwareCutter.Logger import Logger
@@ -39,7 +40,7 @@ def saveCircuit(circ : QuantumCircuit, dir : str, name : str) -> None:
 def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
     
     def workerTask(circuit : QuantumCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
-        Logger().getLogger(__name__).debug(f"getCircResultFromBackend {backend} => STARTED")
+        Logger().getLogger(__name__).debug(f"getCircResultFromBackend {backend} => STARTED with nShots: {nShots}")
         resultsMap[backend] = QuasiDistr.from_counts(
             backend.run(circuit, shots=nShots).result().get_counts()
         )
@@ -48,8 +49,10 @@ def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots
     results = {}
     simulatorBackend = AerSimulator()
 
-    idealSimulatorThread = threading.Thread(target=workerTask, args=[circuit, simulatorBackend, nShots, results])
-    noisyBackendThread = threading.Thread(target=workerTask, args=[circuit, backend, nShots, results])
+    optimizedInputCirc = transpile(circuit, simulatorBackend, optimization_level=3)
+    idealSimulatorThread = threading.Thread(target=workerTask, args=[optimizedInputCirc, simulatorBackend, nShots, results])
+    optimizedNoisyCirc = transpile(circuit, backend, optimization_level=3)
+    noisyBackendThread = threading.Thread(target=workerTask, args=[optimizedNoisyCirc, backend, nShots, results])
 
     idealSimulatorThread.start()
     noisyBackendThread.start()
@@ -74,7 +77,7 @@ def getCircResultFromBackend(circuit: QuantumCircuit, backend: BackendV2, nShots
 def getVirtualCircResultFromBackend(cutCircuit: QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[QuasiDistr, QuasiDistr]:
     
     def workerTask(virtualCirc : VirtualCircuit, backend : BackendV2, nShots : int, resultsMap : Dict[BackendV2, QuasiDistr]) -> None:
-        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend} STARTED")
+        Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend} STARTED with nShots: {nShots}")
         virtualCirc.set_backend_for_all(backend)
         resultsMap[backend], _ = run_virtual_circuit(virtualCirc, shots=nShots)
         Logger().getLogger(__name__).debug(f"getVirtualCircResultFromBackend {backend} DONE")
@@ -154,6 +157,13 @@ def getVirtualCircResultFromBackends(cutCircuit: QuantumCircuit, backends: List[
 def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : QuantumCircuit, backend: BackendV2, nShots : int) -> Tuple[float, float, float]:
     results = {}
 
+    virtualCutCirc = VirtualCircuit(cutCirc.copy())
+    nInstances = 0
+    for frag, frag_circuit in virtualCutCirc.fragment_circuits.items():
+        instance_labels = virtualCutCirc.get_instance_labels(frag)
+        instantiations = generate_instantiations(frag_circuit, instance_labels)
+        nInstances += len(instantiations)
+
     def originalCircTask(originalCirc : QuantumCircuit, backend : BackendV2, nShots : int, results : List) -> None:
         Logger().getLogger(__name__).debug("originalCircTask STARTED")
         idealResult, noisyResult = getCircResultFromBackend(originalCirc, backend, nShots)
@@ -166,7 +176,7 @@ def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : Quan
         results[cutCirc.name] = (idealResult, noisyResult)
         Logger().getLogger(__name__).debug("cutCircTask ENDED")
 
-    originalCircThread = threading.Thread(target=originalCircTask, args=[originalCirc, backend, nShots, results])
+    originalCircThread = threading.Thread(target=originalCircTask, args=[originalCirc, backend, nInstances*nShots, results])
     cutCircThread = threading.Thread(target=cutCircTask, args=[cutCirc, backend, nShots, results])
 
     originalCircThread.start()

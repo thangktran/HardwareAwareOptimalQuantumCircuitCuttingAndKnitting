@@ -37,10 +37,13 @@ def run_virtual_circuit(
         instance_labels = virt.get_instance_labels(frag)
         instantiations = generate_instantiations(frag_circuit, instance_labels)
         num_instances += len(instantiations)
-        #backend = FakePerth()
-        #comp_instantiations = transpile(instantiations, optimization_level=3)
-        jobs[frag] = virt.get_backend(frag).run(instantiations, shots=shots)
-        #jobs[frag] = backend.run(comp_instantiations, shots=shots)
+        backend = virt.get_backend(frag)
+
+        # jobs[frag] = backend.run(instantiations, shots=shots)
+
+        optimizedCirc = transpile(instantiations, backend, optimization_level=3)
+        jobs[frag] = backend.run(optimizedCirc, shots=shots)
+        
 
     Logger().getLogger(__name__).info(f"Running {num_instances} instances...")
     results = {}
