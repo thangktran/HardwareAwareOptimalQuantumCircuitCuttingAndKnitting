@@ -6,6 +6,7 @@ plt.rcParams.update({'font.size': 30})
 
 width = 0.12
 yLim = 90
+
 # yLabel = "number of CNOT gates"
 # title = "Compare number of CNOT gates"
 
@@ -70,23 +71,41 @@ title = "Compare depth between configurations"
 #     tc3 = [32,12]
 
 
-names = ["Supremacy 20 qubits", "Supremacy 25 qubits"]
+# names = ["Supremacy 20 qubits", "Supremacy 25 qubits"]
+# if "CNOT" in title:
+#     i1 = [0,0]
+#     ti1 = [103,139]
+#     ti2 = [109,151]
+#     ti3 = [118,148]
+#     tc1 = [40,57]
+#     tc2 = [40,57]
+#     tc3 = [37,60]
+# else: #depth
+#     i1 = [11,11]
+#     ti1 = [47,69]
+#     ti2 = [69,75]
+#     ti3 = [58,68]
+#     tc1 = [50,55]
+#     tc2 = [39,48]
+#     tc3 = [39,57]
+
+names = ["Supremacy 20 qubits"]
 if "CNOT" in title:
-    i1 = [0,0]
-    ti1 = [103,139]
-    ti2 = [109,151]
-    ti3 = [118,148]
-    tc1 = [40,57]
-    tc2 = [40,57]
-    tc3 = [37,60]
+    i1 = [0]
+    ti1 = [103]
+    ti2 = [109]
+    ti3 = [118]
+    tc1 = [40]
+    tc2 = [40]
+    tc3 = [37]
 else: #depth
-    i1 = [11,11]
-    ti1 = [47,69]
-    ti2 = [69,75]
-    ti3 = [58,68]
-    tc1 = [50,55]
-    tc2 = [39,48]
-    tc3 = [39,57]
+    i1 = [11]
+    ti1 = [47]
+    ti2 = [69]
+    ti3 = [58]
+    tc1 = [50]
+    tc2 = [39]
+    tc3 = [39]
 
 ######################################################################################
 label1 = "input circuit"
