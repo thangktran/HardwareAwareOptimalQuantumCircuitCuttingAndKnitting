@@ -192,6 +192,11 @@ def compareOriginalCircWithCutCirc(originalCirc : QuantumCircuit, cutCirc : Quan
     Logger().getLogger(__name__).debug("cutCircIdealResult: ")
     Logger().getLogger(__name__).debug(dict(sorted(cutCircIdealResult.items())))
 
+    Logger().getLogger(__name__).debug("inputCircNoisyResult: ")
+    Logger().getLogger(__name__).debug(dict(sorted(inputCircNoisyResult.items())))
+    Logger().getLogger(__name__).debug("cutCircNoisyResult: ")
+    Logger().getLogger(__name__).debug(dict(sorted(cutCircNoisyResult.items())))
+
     inputCircIdealResultKeysSet = set(inputCircIdealResult.keys())
     cutCircIdealResultKeysSet = set(cutCircIdealResult.keys())
 
