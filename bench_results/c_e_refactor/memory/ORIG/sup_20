@@ -1,0 +1,21 @@
+python -u benchmark.py -p 2 -q 10 sup 20 1   313.97s  user 3.04s system 99% cpu 5:17.61 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                1684 MB
+page faults from disk:     79
+other page faults:         449183
+python -u benchmark.py -p 2 -q 10 sup 20 1   315.94s  user 2.87s system 99% cpu 5:19.55 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                1686 MB
+page faults from disk:     49
+other page faults:         449233
+python -u benchmark.py -p 2 -q 10 sup 20 1   316.08s  user 2.87s system 99% cpu 5:19.69 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                1689 MB
+page faults from disk:     20
+other page faults:         449240

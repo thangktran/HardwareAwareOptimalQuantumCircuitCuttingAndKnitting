@@ -1,0 +1,42 @@
+python -u benchmark.py -p 2 -q 10 syc 12 2   4.06s  user 1.57s system 89% cpu 6.317 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                245 MB
+page faults from disk:     12
+other page faults:         65724
+python -u benchmark.py -p 2 -q 10 syc 12 2   4.14s  user 1.66s system 90% cpu 6.429 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                289 MB
+page faults from disk:     33
+other page faults:         78622
+python -u benchmark.py -p 2 -q 10 syc 12 2   4.19s  user 1.56s system 89% cpu 6.462 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                289 MB
+page faults from disk:     14
+other page faults:         78637
+python -u benchmark.py -p 2 -q 10 sup 12 1   10.37s  user 1.79s system 95% cpu 12.761 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                385 MB
+page faults from disk:     12
+other page faults:         107399
+python -u benchmark.py -p 2 -q 10 sup 12 1   10.34s  user 1.68s system 94% cpu 12.768 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                385 MB
+page faults from disk:     12
+other page faults:         107393
+python -u benchmark.py -p 2 -q 10 sup 12 1   10.45s  user 1.80s system 95% cpu 12.829 total
+avg shared (code):         0 KB
+avg unshared (data/stack): 0 KB
+total (sum):               0 KB
+max memory:                388 MB
+page faults from disk:     25
+other page faults:         107367
